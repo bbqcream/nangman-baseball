@@ -10,7 +10,6 @@ import {
 } from "firebase/firestore";
 import { useSearchParams } from "react-router-dom";
 
-// 포지션 정의 (원본 유지)
 const POSITIONS = [
     "투수",
     "1루수",
@@ -20,8 +19,6 @@ const POSITIONS = [
     "포수",
     "지명타자",
 ];
-
-// 출력용 약어 및 스타일 매핑
 const POSITION_MAP: { [key: string]: { abbr: string; color: string } } = {
     투수: { abbr: "P", color: "text-red-600 font-black" },
     "1루수": { abbr: "1B", color: "text-gray-700" },
@@ -32,40 +29,26 @@ const POSITION_MAP: { [key: string]: { abbr: string; color: string } } = {
     지명타자: { abbr: "DH", color: "text-gray-700" },
 };
 
-// --- 통계 계산 유틸리티 ---
 const getStatLabel = (p: any) => {
-    if (!p) return "";
+    if (!p || !p.batting) return "OPS 0.000";
     const { batting } = p;
-    let opsStr = "OPS 0.000";
-    if (batting && batting.atBats > 0) {
-        const obp =
-            batting.atBats + batting.walks + batting.hbp > 0
-                ? (batting.hits + batting.walks + batting.hbp) /
-                  (batting.atBats + batting.walks + batting.hbp)
-                : 0;
-        const singles =
-            batting.hits -
-            ((batting.doubles || 0) +
-                (batting.triples || 0) +
-                (batting.homeRuns || 0));
-        const slg =
-            (singles +
-                (batting.doubles || 0) * 2 +
-                (batting.triples || 0) * 3 +
-                (batting.homeRuns || 0) * 4) /
-            batting.atBats;
-        opsStr = `OPS ${(obp + slg).toFixed(3)}`;
-    }
-    return opsStr;
+    if (batting.atBats === 0) return "OPS 0.000";
+    const obp =
+        (batting.hits + batting.walks + batting.hbp) /
+        (batting.atBats + batting.walks + batting.hbp || 1);
+    const singles =
+        batting.hits -
+        ((batting.doubles || 0) +
+            (batting.triples || 0) +
+            (batting.homeRuns || 0));
+    const slg =
+        (singles +
+            (batting.doubles || 0) * 2 +
+            (batting.triples || 0) * 3 +
+            (batting.homeRuns || 0) * 4) /
+        batting.atBats;
+    return `OPS ${(obp + slg).toFixed(3)}`;
 };
-
-interface Player {
-    id: number;
-    order: number;
-    name: string;
-    position: string;
-    statLabel?: string;
-}
 
 const LineupCard = ({
     title,
@@ -83,14 +66,13 @@ const LineupCard = ({
 
     return (
         <div
-            className={`flex-1 min-w-[350px] bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden transition-all ${isLocked ? "opacity-95" : "opacity-100"}`}
+            className={`flex-1 min-w-87.5 bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden transition-all ${isLocked ? "opacity-95" : "opacity-100"}`}
         >
             <div
                 className={`${bgColor} text-white p-4 text-center font-black text-xl tracking-widest uppercase`}
             >
                 {title} {isLocked && "🔒"}
             </div>
-
             <div className="grid grid-cols-12 bg-gray-50 border-b text-center font-bold text-[10px] py-2 text-gray-500 uppercase tracking-tighter">
                 <div className="col-span-1">#</div>
                 <div className="col-span-6">선수명 (STAT)</div>
@@ -98,14 +80,11 @@ const LineupCard = ({
                 <div className="col-span-1"></div>
             </div>
 
-            {lineup.map((player: Player) => {
-                // 현재 포지션의 스타일 정보 가져오기
+            {lineup.map((player: any) => {
                 const posInfo = POSITION_MAP[player.position] || {
                     abbr: player.position,
                     color: "text-gray-400",
                 };
-                const isPitcher = player.position === "투수";
-
                 return (
                     <div
                         key={player.id}
@@ -114,7 +93,6 @@ const LineupCard = ({
                         <div className="col-span-1 text-center font-black text-blue-900 text-lg">
                             {player.order}
                         </div>
-
                         <div className="col-span-6 relative">
                             <input
                                 type="text"
@@ -136,7 +114,6 @@ const LineupCard = ({
                                 }}
                                 className={`w-full p-2 rounded-lg text-sm font-bold ${isLocked ? "bg-transparent border-none text-gray-800" : "bg-blue-50 outline-none"}`}
                             />
-
                             {!isLocked &&
                                 showDropdown === player.id &&
                                 searchTerm[player.id] && (
@@ -149,6 +126,18 @@ const LineupCard = ({
                                             )
                                             .map((p: any) => {
                                                 const stat = getStatLabel(p);
+                                                const teamTag =
+                                                    p.teamId === "mercenary"
+                                                        ? "용병"
+                                                        : p.teamId === "coupang"
+                                                          ? "쿠팡"
+                                                          : "용키";
+                                                const teamColor =
+                                                    p.teamId === "mercenary"
+                                                        ? "bg-slate-100 text-slate-500"
+                                                        : p.teamId === "coupang"
+                                                          ? "bg-amber-100 text-amber-600"
+                                                          : "bg-blue-100 text-blue-600";
                                                 return (
                                                     <div
                                                         key={p.id}
@@ -176,9 +165,16 @@ const LineupCard = ({
                                                             );
                                                         }}
                                                     >
-                                                        <span className="font-bold text-sm">
-                                                            {p.name}
-                                                        </span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold text-sm">
+                                                                {p.name}
+                                                            </span>
+                                                            <span
+                                                                className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${teamColor}`}
+                                                            >
+                                                                {teamTag}
+                                                            </span>
+                                                        </div>
                                                         <span className="text-blue-600 font-black text-[10px]">
                                                             {stat}
                                                         </span>
@@ -188,10 +184,8 @@ const LineupCard = ({
                                     </div>
                                 )}
                         </div>
-
                         <div className="col-span-4 text-center">
                             {isLocked ? (
-                                // 잠금 상태: 약어로 표시 + 투수일 경우 빨간색/볼드 적용
                                 <span
                                     className={`text-sm font-bold ${posInfo.color}`}
                                 >
@@ -205,26 +199,17 @@ const LineupCard = ({
                                             position: e.target.value,
                                         })
                                     }
-                                    className={`w-full p-2 text-xs rounded-lg appearance-none bg-gray-100 font-bold ${isPitcher ? "text-red-600" : "text-gray-700"}`}
+                                    className="w-full p-2 text-xs rounded-lg appearance-none bg-gray-100 font-bold"
                                 >
                                     <option value="">선택</option>
                                     {POSITIONS.map((pos) => (
-                                        <option
-                                            key={pos}
-                                            value={pos}
-                                            className={
-                                                pos === "투수"
-                                                    ? "font-bold text-red-600"
-                                                    : ""
-                                            }
-                                        >
+                                        <option key={pos} value={pos}>
                                             {pos} ({POSITION_MAP[pos]?.abbr})
                                         </option>
                                     ))}
                                 </select>
                             )}
                         </div>
-
                         <div className="col-span-1 text-center">
                             {!isLocked && player.order > 5 && (
                                 <button
@@ -240,7 +225,6 @@ const LineupCard = ({
                     </div>
                 );
             })}
-
             {!isLocked && (
                 <button
                     onClick={() => addPlayer(side)}
@@ -257,17 +241,15 @@ const Lineup = () => {
     const [searchParams] = useSearchParams();
     const dateId =
         searchParams.get("date") || new Date().toISOString().split("T")[0];
-
     const [isLocked, setIsLocked] = useState(false);
     const [loading, setLoading] = useState(true);
     const [exists, setExists] = useState(false);
     const [dbPlayers, setDbPlayers] = useState<any[]>([]);
-    const [awayLineup, setAwayLineup] = useState<Player[]>([]);
-    const [homeLineup, setHomeLineup] = useState<Player[]>([]);
+    const [awayLineup, setAwayLineup] = useState<any[]>([]);
+    const [homeLineup, setHomeLineup] = useState<any[]>([]);
 
     useEffect(() => {
         const init = async () => {
-            setLoading(true);
             try {
                 const playerSnap = await getDocs(collection(db, "players"));
                 setDbPlayers(
@@ -276,7 +258,6 @@ const Lineup = () => {
                         ...doc.data(),
                     })),
                 );
-
                 const docSnap = await getDoc(doc(db, "lineups", dateId));
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -294,11 +275,7 @@ const Lineup = () => {
         init();
     }, [dateId]);
 
-    const handleUpdate = (
-        side: "away" | "home",
-        id: number,
-        updates: Partial<Player>,
-    ) => {
+    const handleUpdate = (side: "away" | "home", id: number, updates: any) => {
         const setter = side === "away" ? setAwayLineup : setHomeLineup;
         setter((prev) =>
             prev.map((p) => (p.id === id ? { ...p, ...updates } : p)),
@@ -371,7 +348,6 @@ const Lineup = () => {
                     </h1>
                     <div className="h-1.5 w-16 bg-blue-600 mx-auto mt-3"></div>
                 </div>
-
                 {!exists ? (
                     <div className="bg-white rounded-3xl p-16 text-center border-2 border-dashed">
                         <button

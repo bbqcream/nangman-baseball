@@ -3,10 +3,34 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import type { Player } from "../types/record-interface";
 
-type Filter = "all" | "coupang" | "yongkids";
+type Filter = "all" | "coupang" | "yongkids" | "mercenary";
 
-const teamLabel = (teamId: string) =>
-    teamId === "coupang" ? "쿠팡 일용직스" : "Daegu Yongkids";
+const TEAM_CONFIG: Record<
+    string,
+    { label: string; color: string; bar: string; bg: string; text: string }
+> = {
+    coupang: {
+        label: "쿠팡 일용직스",
+        color: "bg-amber-500",
+        bar: "bg-amber-500",
+        bg: "bg-amber-50",
+        text: "text-amber-800",
+    },
+    yongkids: {
+        label: "Daegu Yongkids",
+        color: "bg-blue-500",
+        bar: "bg-blue-500",
+        bg: "bg-blue-50",
+        text: "text-blue-800",
+    },
+    mercenary: {
+        label: "용병 (Mercenary)",
+        color: "bg-slate-500",
+        bar: "bg-slate-500",
+        bg: "bg-slate-100",
+        text: "text-slate-600",
+    },
+};
 
 const getAvg = (p: Player) =>
     (p.batting.hits / (p.batting.atBats || 1)).toFixed(3);
@@ -31,7 +55,18 @@ const Home: React.FC = () => {
     }, []);
 
     const filtered =
-        filter === "all" ? players : players.filter((p) => p.teamId === filter);
+        filter === "all"
+            ? [...players].sort((a, b) => {
+                  const priority: Record<string, number> = {
+                      coupang: 1,
+                      yongkids: 2,
+                      mercenary: 3,
+                  };
+                  return (
+                      (priority[a.teamId] || 99) - (priority[b.teamId] || 99)
+                  );
+              })
+            : players.filter((p) => p.teamId === filter);
 
     const maxAvg = Math.max(
         ...players.map((p) => p.batting.hits / (p.batting.atBats || 1)),
@@ -51,9 +86,7 @@ const Home: React.FC = () => {
                     </h1>
                 </div>
 
-                {/* 반응형 컨테이너: 모바일(세로) -> 데스크탑(가로) */}
                 <div className="flex flex-col md:flex-row border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-                    {/* 테이블 영역 */}
                     <div className="flex-1 min-w-0 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800">
                         <div className="flex flex-wrap items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800 gap-3">
                             <span className="text-[13px] font-medium text-slate-900 dark:text-slate-100">
@@ -61,7 +94,12 @@ const Home: React.FC = () => {
                             </span>
                             <div className="flex gap-1.5">
                                 {(
-                                    ["all", "coupang", "yongkids"] as Filter[]
+                                    [
+                                        "all",
+                                        "coupang",
+                                        "yongkids",
+                                        "mercenary",
+                                    ] as Filter[]
                                 ).map((f) => (
                                     <button
                                         key={f}
@@ -76,19 +114,18 @@ const Home: React.FC = () => {
                                                 : "border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50",
                                         ].join(" ")}
                                     >
-                                        {
-                                            {
-                                                all: "전체",
-                                                coupang: "쿠팡",
-                                                yongkids: "Yongkids",
-                                            }[f]
-                                        }
+                                        {f === "all"
+                                            ? "전체"
+                                            : f === "coupang"
+                                              ? "쿠팡"
+                                              : f === "yongkids"
+                                                ? "Yongkids"
+                                                : "용병"}
                                     </button>
                                 ))}
                             </div>
                         </div>
 
-                        {/* 모바일 가로 스크롤 대응 */}
                         <div className="overflow-x-auto">
                             <table className="w-full border-collapse min-w-125">
                                 <thead>
@@ -111,8 +148,9 @@ const Home: React.FC = () => {
                                 </thead>
                                 <tbody>
                                     {filtered.map((player) => {
-                                        const isCoupang =
-                                            player.teamId === "coupang";
+                                        const config =
+                                            TEAM_CONFIG[player.teamId] ||
+                                            TEAM_CONFIG.mercenary;
                                         const a =
                                             player.batting.hits /
                                             (player.batting.atBats || 1);
@@ -133,7 +171,7 @@ const Home: React.FC = () => {
                                                 <td className="px-5 py-3">
                                                     <div className="flex items-center gap-2.5">
                                                         <div
-                                                            className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium ${isCoupang ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}
+                                                            className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${config.bg} ${config.text}`}
                                                         >
                                                             {player.name[0]}
                                                         </div>
@@ -142,10 +180,8 @@ const Home: React.FC = () => {
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td className="px-5 py-3 text-[10px]">
-                                                    {isCoupang
-                                                        ? "쿠팡"
-                                                        : "Yongkids"}
+                                                <td className="px-5 py-3 text-[10px] text-slate-500">
+                                                    {config.label.split(" ")[0]}
                                                 </td>
                                                 <td className="px-5 py-3 text-right text-[13px] tabular-nums">
                                                     {getAvg(player)}
@@ -157,7 +193,7 @@ const Home: React.FC = () => {
                                                     <div className="flex items-center gap-2">
                                                         <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
                                                             <div
-                                                                className={`h-full ${isCoupang ? "bg-amber-500" : "bg-blue-500"}`}
+                                                                className={`h-full ${config.bar}`}
                                                                 style={{
                                                                     width: `${pct}%`,
                                                                 }}
@@ -173,7 +209,6 @@ const Home: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* 우측 디테일 패널 */}
                     <div className="w-full md:w-72 shrink-0 border-t md:border-t-0 border-slate-200 dark:border-slate-800 bg-slate-50/30">
                         {selectedPlayer ? (
                             <DetailPanel player={selectedPlayer} />
@@ -190,21 +225,22 @@ const Home: React.FC = () => {
 };
 
 const DetailPanel: React.FC<{ player: Player }> = ({ player }) => {
-    // ... DetailPanel 로직은 동일하게 유지하되, 필요시 패딩 조정 ...
+    const config = TEAM_CONFIG[player.teamId] || TEAM_CONFIG.mercenary;
     return (
         <div className="p-5">
-            {/* ... 내부 상세 내용 ... */}
             <p className="font-bold text-lg mb-2">{player.name}</p>
-            <p className="text-sm text-slate-500 mb-4">
-                {teamLabel(player.teamId)}
+            <p
+                className={`text-xs font-bold mb-4 px-2 py-1 rounded inline-block ${config.bg} ${config.text}`}
+            >
+                {config.label}
             </p>
             <div className="grid grid-cols-2 gap-2">
                 <div className="bg-white p-3 rounded shadow-sm border border-slate-100">
-                    <p className="text-[10px] text-slate-400">AVG</p>
+                    <p className="text-[10px] text-slate-400 uppercase">AVG</p>
                     <p className="font-bold">{getAvg(player)}</p>
                 </div>
                 <div className="bg-white p-3 rounded shadow-sm border border-slate-100">
-                    <p className="text-[10px] text-slate-400">ERA</p>
+                    <p className="text-[10px] text-slate-400 uppercase">ERA</p>
                     <p className="font-bold">{getEra(player)}</p>
                 </div>
             </div>

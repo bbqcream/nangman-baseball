@@ -5,6 +5,31 @@ import type { Player } from "../types/record-interface";
 
 type Mode = "hitter" | "pitcher";
 
+// 팀 정보 공통 관리
+const TEAM_INFO: Record<
+    string,
+    { label: string; dot: string; bg: string; text: string }
+> = {
+    coupang: {
+        label: "쿠팡 일용직스",
+        dot: "bg-amber-400",
+        bg: "bg-amber-100",
+        text: "text-amber-700",
+    },
+    yongkids: {
+        label: "대구 용키즈",
+        dot: "bg-blue-500",
+        bg: "bg-blue-100",
+        text: "text-blue-700",
+    },
+    mercenary: {
+        label: "용병 (Mercenary)",
+        dot: "bg-slate-400",
+        bg: "bg-slate-100",
+        text: "text-slate-600",
+    },
+};
+
 const Record: React.FC = () => {
     const [players, setPlayers] = useState<Player[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -19,11 +44,8 @@ const Record: React.FC = () => {
         );
     }, []);
 
-    // --- 통계 계산 로직 ---
     const calcStats = (p: Player) => {
         const { batting, pitching } = p;
-
-        // 타자 지표
         const avg = batting.atBats > 0 ? batting.hits / batting.atBats : 0;
         const obp =
             batting.atBats + batting.walks + batting.hbp > 0
@@ -49,8 +71,6 @@ const Record: React.FC = () => {
                 batting.homeRuns * 2.5 -
                 (batting.k || 0) * 0.15) /
             10;
-
-        // 투수 지표
         const era =
             pitching.inningsPitched > 0
                 ? (pitching.earnedRuns * 9) / pitching.inningsPitched
@@ -64,7 +84,6 @@ const Record: React.FC = () => {
         return { avg, obp, slg, ops, era, bWar, pWar };
     };
 
-    // 정렬 로직 (각 모드별 WAR 기준)
     const sortedPlayers = [...players].sort((a, b) => {
         const statA = calcStats(a);
         const statB = calcStats(b);
@@ -90,33 +109,26 @@ const Record: React.FC = () => {
                             시즌 기록실
                         </h1>
                     </div>
-                    {/* 타자/투수 전환 탭 */}
                     <div className="flex bg-white dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-800">
-                        <button
-                            onClick={() => {
-                                setMode("hitter");
-                                setSelectedId(null);
-                            }}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === "hitter" ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
-                        >
-                            타자 순위
-                        </button>
-                        <button
-                            onClick={() => {
-                                setMode("pitcher");
-                                setSelectedId(null);
-                            }}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === "pitcher" ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
-                        >
-                            투수 순위
-                        </button>
+                        {(["hitter", "pitcher"] as const).map((m) => (
+                            <button
+                                key={m}
+                                onClick={() => {
+                                    setMode(m);
+                                    setSelectedId(null);
+                                }}
+                                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === m ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                            >
+                                {m === "hitter" ? "타자 순위" : "투수 순위"}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
-                <div className="flex border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 min-h-150">
-                    {/* 사이드바: 랭킹 리스트 */}
+                <div className="flex border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 min-h-[600px]">
+                    {/* 사이드바 */}
                     <div className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col">
-                        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
+                        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
                             <span className={labelCls}>
                                 {mode === "hitter"
                                     ? "타자 WAR 순위"
@@ -124,49 +136,45 @@ const Record: React.FC = () => {
                             </span>
                         </div>
                         <div className="overflow-y-auto flex-1">
-                            {sortedPlayers.map((p, index) => {
-                                const pStats = calcStats(p);
-                                const currentWar =
-                                    mode === "hitter"
-                                        ? pStats.bWar
-                                        : pStats.pWar;
-
-                                return (
-                                    <div
-                                        key={p.id}
-                                        onClick={() => setSelectedId(p.id)}
-                                        className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 last:border-0 transition-colors ${selectedId === p.id ? "bg-slate-50 dark:bg-slate-800/50" : "hover:bg-slate-50/70 dark:hover:bg-slate-800/30"}`}
+                            {sortedPlayers.map((p, index) => (
+                                <div
+                                    key={p.id}
+                                    onClick={() => setSelectedId(p.id)}
+                                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 last:border-0 transition-colors ${selectedId === p.id ? "bg-slate-50 dark:bg-slate-800/50" : "hover:bg-slate-50/70 dark:hover:bg-slate-800/30"}`}
+                                >
+                                    <span
+                                        className={`text-[11px] font-black w-4 ${index < 3 ? "text-blue-600" : "text-slate-300"}`}
                                     >
-                                        <span
-                                            className={`text-[11px] font-black w-4 ${index < 3 ? "text-blue-600" : "text-slate-300"}`}
-                                        >
-                                            {index + 1}
-                                        </span>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate">
-                                                {p.name}
-                                            </p>
-                                            <p className="text-[10px] text-slate-400">
-                                                WAR {currentWar.toFixed(2)}
-                                            </p>
-                                        </div>
-                                        <div
-                                            className={`w-1.5 h-1.5 rounded-full ${p.teamId === "coupang" ? "bg-amber-400" : "bg-blue-500"}`}
-                                        />
+                                        {index + 1}
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate">
+                                            {p.name}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400">
+                                            WAR{" "}
+                                            {(mode === "hitter"
+                                                ? calcStats(p).bWar
+                                                : calcStats(p).pWar
+                                            ).toFixed(2)}
+                                        </p>
                                     </div>
-                                );
-                            })}
+                                    <div
+                                        className={`w-1.5 h-1.5 rounded-full ${TEAM_INFO[p.teamId]?.dot || "bg-slate-300"}`}
+                                    />
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    {/* 메인: 상세 기록 */}
+                    {/* 메인 상세 */}
                     <div className="flex-1 flex flex-col min-w-0">
                         {selected && stats ? (
                             <>
                                 <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                                     <div className="flex items-center gap-3">
                                         <div
-                                            className={`w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-bold ${selected.teamId === "coupang" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}
+                                            className={`w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-bold ${TEAM_INFO[selected.teamId]?.bg} ${TEAM_INFO[selected.teamId]?.text}`}
                                         >
                                             {selected.name[0]}
                                         </div>
@@ -175,9 +183,10 @@ const Record: React.FC = () => {
                                                 {selected.name}
                                             </p>
                                             <p className="text-[11px] text-slate-500">
-                                                {selected.teamId === "coupang"
-                                                    ? "쿠팡 일용직스"
-                                                    : "대구 용키즈"}
+                                                {
+                                                    TEAM_INFO[selected.teamId]
+                                                        ?.label
+                                                }
                                             </p>
                                         </div>
                                     </div>
@@ -191,8 +200,8 @@ const Record: React.FC = () => {
                                         </p>
                                     </div>
                                 </div>
-
                                 <div className="p-6 overflow-y-auto flex-1">
+                                    {/* ... StatCard 및 MiniCard 렌더링 부분 (기존과 동일) ... */}
                                     {mode === "hitter" ? (
                                         <section>
                                             <p className={`${labelCls} mb-4`}>
@@ -313,8 +322,7 @@ const Record: React.FC = () => {
                             <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
                                 <span className="text-4xl mb-2">📈</span>
                                 <p className="text-[13px] font-medium italic">
-                                    좌측 랭킹에서 선수를 선택하여 분석 리포트를
-                                    확인하세요
+                                    좌측 랭킹에서 선수를 선택하세요
                                 </p>
                             </div>
                         )}
@@ -325,13 +333,12 @@ const Record: React.FC = () => {
     );
 };
 
+// StatCard, MiniCard 하단 컴포넌트는 기존과 동일하게 유지...
 const StatCard = ({ label, value, highlight = false }: any) => (
     <div
         className={`p-4 rounded-xl border ${highlight ? "bg-slate-900 border-slate-900 text-white" : "bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-800 text-slate-900 dark:text-slate-100"}`}
     >
-        <p
-            className={`text-[10px] font-bold uppercase mb-1 ${highlight ? "text-slate-400" : "text-slate-400"}`}
-        >
+        <p className="text-[10px] font-bold uppercase mb-1 text-slate-400">
             {label}
         </p>
         <p className="text-2xl font-black tabular-nums">{value}</p>

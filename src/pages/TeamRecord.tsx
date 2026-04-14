@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import { db } from "../firebase/firebase";
-import { useNavigate } from "react-router-dom";
 
 interface GameDetail {
     scorers: string;
@@ -52,7 +51,6 @@ const TEAM_BADGE: Record<TeamId, string> = {
 };
 
 const TeamRecord: React.FC = () => {
-    const navigate = useNavigate();
     const [teamData, setTeamData] = useState<Record<string, TeamData>>({});
     const [selectedTeam, setSelectedTeam] = useState<TeamId>("coupang");
     const [saving, setSaving] = useState(false);
@@ -708,7 +706,7 @@ const DetailCard: React.FC<{ label: string; value: string }> = ({
         <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">
             {label}
         </p>
-        <p className="text-sm font-medium text-slate-800 break-words">
+        <p className="text-sm font-medium text-slate-800 wrap-break-word">
             {value}
         </p>
     </div>

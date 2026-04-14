@@ -181,13 +181,11 @@ const StarterPitcherCard = ({
 
 // ── 4. 라인업 카드 (한 줄 배치 & 깔끔한 디자인) ──────────────────────
 const LineupCard = ({
-    title,
     lineup,
     side,
     isLocked,
     onUpdate,
     onAdd,
-    onRemove,
     dbPlayers,
     pitcher,
     onPitcherUpdate,
@@ -449,6 +447,7 @@ const Lineup = () => {
             updatedAt: Timestamp.now(),
         });
         setIsLocked(lock);
+        alert("라인업이 성공적으로 저장되었습니다.");
     };
 
     if (loading)
@@ -493,7 +492,7 @@ const Lineup = () => {
                                 side="away"
                                 bgColor="bg-slate-800"
                                 isLocked={isLocked}
-                                onUpdate={(s: any, id: any, u: any) =>
+                                onUpdate={(_s: any, id: any, u: any) =>
                                     setAwayLineup((prev) =>
                                         prev.map((p) =>
                                             p.id === id ? { ...p, ...u } : p,
@@ -511,7 +510,7 @@ const Lineup = () => {
                                         },
                                     ])
                                 }
-                                onRemove={(s: any, id: any) =>
+                                onRemove={(_s: any, id: any) =>
                                     setAwayLineup(
                                         awayLineup
                                             .filter((p) => p.id !== id)
@@ -523,7 +522,7 @@ const Lineup = () => {
                                 }
                                 dbPlayers={dbPlayers}
                                 pitcher={awayPitcher}
-                                onPitcherUpdate={(s: any, u: any) =>
+                                onPitcherUpdate={(_s: any, u: any) =>
                                     setAwayPitcher((p: any) => ({ ...p, ...u }))
                                 }
                             />
@@ -534,7 +533,7 @@ const Lineup = () => {
                                 side="home"
                                 bgColor="bg-blue-700"
                                 isLocked={isLocked}
-                                onUpdate={(s: any, id: any, u: any) =>
+                                onUpdate={(_s: any, id: any, u: any) =>
                                     setHomeLineup((prev) =>
                                         prev.map((p) =>
                                             p.id === id ? { ...p, ...u } : p,
@@ -552,7 +551,7 @@ const Lineup = () => {
                                         },
                                     ])
                                 }
-                                onRemove={(s: any, id: any) =>
+                                onRemove={(_s: any, id: any) =>
                                     setHomeLineup(
                                         homeLineup
                                             .filter((p) => p.id !== id)
@@ -564,7 +563,7 @@ const Lineup = () => {
                                 }
                                 dbPlayers={dbPlayers}
                                 pitcher={homePitcher}
-                                onPitcherUpdate={(s: any, u: any) =>
+                                onPitcherUpdate={(_s: any, u: any) =>
                                     setHomePitcher((p: any) => ({ ...p, ...u }))
                                 }
                             />

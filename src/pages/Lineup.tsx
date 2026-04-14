@@ -51,7 +51,7 @@ const POSITIONS = [
     "2루수",
     "유격수",
     "3루수",
-    "포수",
+    "외야수",
     "지명타자",
 ];
 const POSITION_MAP: Record<string, any> = {
@@ -60,7 +60,7 @@ const POSITION_MAP: Record<string, any> = {
     "2루수": { abbr: "2B", color: "text-gray-600" },
     유격수: { abbr: "SS", color: "text-gray-600" },
     "3루수": { abbr: "3B", color: "text-gray-600" },
-    포수: { abbr: "C", color: "text-gray-600" },
+    외야수: { abbr: "OF", color: "text-gray-600" },
     지명타자: { abbr: "DH", color: "text-gray-600" },
 };
 

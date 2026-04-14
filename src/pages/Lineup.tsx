@@ -1,7 +1,16 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { db } from "../firebase/firebase";
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import {
+    doc,
+    getDoc,
+    setDoc,
+    collection,
+    getDocs,
+    Timestamp,
+} from "firebase/firestore";
+import { useSearchParams } from "react-router-dom";
 
+// 포지션 정의
 const POSITIONS = [
     "투수",
     "1루수",
@@ -12,179 +21,43 @@ const POSITIONS = [
     "지명타자",
 ];
 
+// --- 통계 계산 유틸리티 (제공해주신 로직 반영) ---
+const getStatLabel = (p: any) => {
+    if (!p) return "";
+
+    // OPS 계산 (공통)
+    const { batting } = p;
+    let opsStr = "OPS 0.000";
+    if (batting && batting.atBats > 0) {
+        const obp =
+            batting.atBats + batting.walks + batting.hbp > 0
+                ? (batting.hits + batting.walks + batting.hbp) /
+                  (batting.atBats + batting.walks + batting.hbp)
+                : 0;
+        const singles =
+            batting.hits -
+            ((batting.doubles || 0) +
+                (batting.triples || 0) +
+                (batting.homeRuns || 0));
+        const slg =
+            (singles +
+                (batting.doubles || 0) * 2 +
+                (batting.triples || 0) * 3 +
+                (batting.homeRuns || 0) * 4) /
+            batting.atBats;
+        opsStr = `OPS ${(obp + slg).toFixed(3)}`;
+    }
+    return opsStr;
+};
+
 interface Player {
     id: number;
     order: number;
     name: string;
     position: string;
+    statLabel?: string;
 }
 
-const Lineup = () => {
-    const [isLocked, setIsLocked] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const today = new Date().toLocaleDateString("ko-KR", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        weekday: "short",
-    });
-
-    const dateId = new Date().toISOString().split("T")[0];
-
-    const createInitialLineup = () =>
-        Array.from({ length: 5 }, (_, i) => ({
-            id: Math.random(),
-            order: i + 1,
-            name: "",
-            position: "",
-        }));
-
-    const [awayLineup, setAwayLineup] = useState<Player[]>(
-        createInitialLineup(),
-    );
-    const [homeLineup, setHomeLineup] = useState<Player[]>(
-        createInitialLineup(),
-    );
-
-    // --- 1. 데이터 불러오기 (Read) ---
-    useEffect(() => {
-        const fetchLineup = async () => {
-            try {
-                const docRef = doc(db, "lineups", dateId);
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    setAwayLineup(data.awayLineup);
-                    setHomeLineup(data.homeLineup);
-                    setIsLocked(data.isLocked || false);
-                }
-            } catch (e) {
-                console.error("데이터 로드 실패:", e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchLineup();
-    }, [dateId]);
-
-    // --- 2. 데이터 저장하기 (Write/Update) ---
-    const saveToFirebase = async (lockState: boolean) => {
-        try {
-            await setDoc(doc(db, "lineups", dateId), {
-                awayLineup,
-                homeLineup,
-                isLocked: lockState,
-                updatedAt: Timestamp.now(),
-            });
-        } catch (e) {
-            console.error("저장 실패:", e);
-            alert("저장 중 오류가 발생했습니다.");
-        }
-    };
-
-    const toggleLock = async () => {
-        const nextState = !isLocked;
-        setIsLocked(nextState);
-        await saveToFirebase(nextState); // 상태 변경 시 자동으로 DB 반영
-    };
-
-    // 기존 업데이트 로직들
-    const addPlayer = (side: "away" | "home") => {
-        const setter = side === "away" ? setAwayLineup : setHomeLineup;
-        const current = side === "away" ? awayLineup : homeLineup;
-        setter([
-            ...current,
-            {
-                id: Date.now(),
-                order: current.length + 1,
-                name: "",
-                position: "",
-            },
-        ]);
-    };
-
-    const removePlayer = (side: "away" | "home", id: number) => {
-        const setter = side === "away" ? setAwayLineup : setHomeLineup;
-        const current = side === "away" ? awayLineup : homeLineup;
-        const filtered = current.filter((p) => p.id !== id);
-        setter(filtered.map((p, i) => ({ ...p, order: i + 1 })));
-    };
-
-    const handleUpdate = (
-        side: "away" | "home",
-        id: number,
-        field: string,
-        value: string,
-    ) => {
-        const setter = side === "away" ? setAwayLineup : setHomeLineup;
-        const current = side === "away" ? awayLineup : homeLineup;
-        setter(
-            current.map((p) => (p.id === id ? { ...p, [field]: value } : p)),
-        );
-    };
-
-    if (loading)
-        return (
-            <div className="p-10 text-center font-bold">
-                라인업 불러오는 중...
-            </div>
-        );
-
-    return (
-        <div className="min-h-screen bg-gray-100 p-4 pb-20">
-            <div className="max-w-5xl mx-auto">
-                <div className="text-center mb-8">
-                    <p className="text-blue-600 font-bold tracking-tighter">
-                        {today}
-                    </p>
-                    <h1 className="text-4xl font-black italic text-gray-900 uppercase">
-                        Match Lineup
-                    </h1>
-                    <div className="h-1 w-20 bg-blue-600 mx-auto mt-2"></div>
-                </div>
-
-                <div className="flex flex-wrap gap-6 justify-center">
-                    <LineupCard
-                        title="쿠팡 일용직스"
-                        lineup={awayLineup}
-                        side="away"
-                        bgColor="bg-gray-700"
-                        isLocked={isLocked}
-                        handleUpdate={handleUpdate}
-                        addPlayer={addPlayer}
-                        removePlayer={removePlayer}
-                    />
-                    <LineupCard
-                        title="Daegu Yongkids"
-                        lineup={homeLineup}
-                        side="home"
-                        bgColor="bg-blue-800"
-                        isLocked={isLocked}
-                        handleUpdate={handleUpdate}
-                        addPlayer={addPlayer}
-                        removePlayer={removePlayer}
-                    />
-                </div>
-
-                <div className="mt-10 max-w-md mx-auto">
-                    <button
-                        onClick={toggleLock}
-                        className={`w-full py-4 rounded-xl font-black text-xl shadow-lg transition transform active:scale-95 ${
-                            isLocked
-                                ? "bg-gray-800 text-white hover:bg-gray-900"
-                                : "bg-red-600 text-white hover:bg-red-700"
-                        }`}
-                    >
-                        {isLocked ? "라인업 수정하기" : "라인업 확정 및 저장"}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// LineupCard 컴포넌트는 이전과 동일 (바깥에 위치해야 함)
 const LineupCard = ({
     title,
     lineup,
@@ -194,90 +67,326 @@ const LineupCard = ({
     handleUpdate,
     addPlayer,
     removePlayer,
-}: any) => (
-    <div
-        className={`flex-1 min-w-[350px] bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden ${isLocked ? "opacity-90" : ""}`}
-    >
+    dbPlayers,
+}: any) => {
+    const [searchTerm, setSearchTerm] = useState<{ [key: number]: string }>({});
+    const [showDropdown, setShowDropdown] = useState<number | null>(null);
+
+    return (
         <div
-            className={`${bgColor} text-white p-3 text-center font-black text-xl tracking-widest`}
+            className={`flex-1 min-w-[350px] bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden transition-all ${isLocked ? "opacity-95" : "opacity-100"}`}
         >
-            {title} {isLocked && "🔒"}
-        </div>
-        {/* ... 이하 생략 (이전 코드와 동일하게 input에 disabled={isLocked} 적용) ... */}
-        <div className="grid grid-cols-12 bg-gray-50 border-b text-center font-bold text-xs py-2 text-gray-500">
-            <div className="col-span-2">타순</div>
-            <div className="col-span-5">선수명</div>
-            <div className="col-span-4">수비</div>
-            <div className="col-span-1"></div>
-        </div>
-        {lineup.map((player: any) => (
             <div
-                key={player.id}
-                className="grid grid-cols-12 items-center border-b border-gray-100 p-2 gap-1"
+                className={`${bgColor} text-white p-4 text-center font-black text-xl tracking-widest uppercase`}
             >
-                <div className="col-span-2 text-center font-black text-blue-900">
-                    {player.order}
-                </div>
-                <div className="col-span-5">
-                    <input
-                        type="text"
-                        value={player.name}
-                        disabled={isLocked}
-                        placeholder={isLocked ? "" : "이름"}
-                        onChange={(e) =>
-                            handleUpdate(
-                                side,
-                                player.id,
-                                "name",
-                                e.target.value,
-                            )
-                        }
-                        className={`w-full p-1.5 rounded-md text-sm font-bold ${isLocked ? "bg-transparent border-none" : "bg-gray-50"}`}
-                    />
-                </div>
-                <div className="col-span-4">
-                    <select
-                        value={player.position}
-                        disabled={isLocked}
-                        onChange={(e) =>
-                            handleUpdate(
-                                side,
-                                player.id,
-                                "position",
-                                e.target.value,
-                            )
-                        }
-                        className={`w-full p-1.5 text-xs rounded-md appearance-none ${isLocked ? "bg-transparent border-none" : "bg-gray-100"}`}
-                    >
-                        <option value="">선택</option>
-                        {POSITIONS.map((pos) => (
-                            <option key={pos} value={pos}>
-                                {pos}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                <div className="col-span-1 text-center">
-                    {!isLocked && player.order > 5 && (
-                        <button
-                            onClick={() => removePlayer(side, player.id)}
-                            className="text-red-300 text-lg"
-                        >
-                            ×
-                        </button>
-                    )}
-                </div>
+                {title} {isLocked && "🔒"}
             </div>
-        ))}
-        {!isLocked && (
-            <button
-                onClick={() => addPlayer(side)}
-                className="w-full py-3 text-sm text-gray-400 font-bold hover:bg-gray-50 transition border-t border-dashed"
-            >
-                + 타순 추가
-            </button>
-        )}
-    </div>
-);
+
+            <div className="grid grid-cols-12 bg-gray-50 border-b text-center font-bold text-[10px] py-2 text-gray-500 uppercase tracking-tighter">
+                <div className="col-span-1">#</div>
+                <div className="col-span-6">선수명 (STAT)</div>
+                <div className="col-span-4">수비위치</div>
+                <div className="col-span-1"></div>
+            </div>
+
+            {lineup.map((player: Player) => (
+                <div
+                    key={player.id}
+                    className="grid grid-cols-12 items-center border-b border-gray-50 p-2 gap-1 relative group"
+                >
+                    <div className="col-span-1 text-center font-black text-blue-900 text-lg">
+                        {player.order}
+                    </div>
+
+                    <div className="col-span-6 relative">
+                        <input
+                            type="text"
+                            value={
+                                isLocked
+                                    ? player.name
+                                        ? `${player.name} (${player.statLabel || ""})`
+                                        : ""
+                                    : (searchTerm[player.id] ?? player.name)
+                            }
+                            disabled={isLocked}
+                            placeholder="선수 검색"
+                            onChange={(e) => {
+                                setSearchTerm({
+                                    ...searchTerm,
+                                    [player.id]: e.target.value,
+                                });
+                                setShowDropdown(player.id);
+                            }}
+                            className={`w-full p-2 rounded-lg text-sm font-bold ${isLocked ? "bg-transparent border-none text-gray-800" : "bg-blue-50 outline-none"}`}
+                        />
+
+                        {!isLocked &&
+                            showDropdown === player.id &&
+                            searchTerm[player.id] && (
+                                <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-2xl max-h-48 overflow-y-auto mt-1">
+                                    {dbPlayers
+                                        .filter((p: any) =>
+                                            p.name.includes(
+                                                searchTerm[player.id],
+                                            ),
+                                        )
+                                        .map((p: any) => {
+                                            const stat = getStatLabel(p);
+                                            return (
+                                                <div
+                                                    key={p.id}
+                                                    className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center border-b last:border-none"
+                                                    onClick={() => {
+                                                        handleUpdate(
+                                                            side,
+                                                            player.id,
+                                                            {
+                                                                name: p.name,
+                                                                position:
+                                                                    p.position ||
+                                                                    "",
+                                                                statLabel: stat,
+                                                            },
+                                                        );
+                                                        setSearchTerm({
+                                                            ...searchTerm,
+                                                            [player.id]: p.name,
+                                                        });
+                                                        setShowDropdown(null);
+                                                    }}
+                                                >
+                                                    <span className="font-bold text-sm">
+                                                        {p.name}
+                                                    </span>
+                                                    <span className="text-blue-600 font-black text-[10px]">
+                                                        {stat}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            )}
+                    </div>
+
+                    <div className="col-span-4">
+                        <select
+                            value={player.position}
+                            disabled={isLocked}
+                            onChange={(e) =>
+                                handleUpdate(side, player.id, {
+                                    position: e.target.value,
+                                })
+                            }
+                            className={`w-full p-2 text-xs rounded-lg appearance-none ${isLocked ? "bg-transparent border-none font-bold text-gray-600 text-center" : "bg-gray-100"}`}
+                        >
+                            <option value="">선택</option>
+                            {POSITIONS.map((pos) => (
+                                <option key={pos} value={pos}>
+                                    {pos}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="col-span-1 text-center">
+                        {!isLocked && player.order > 5 && (
+                            <button
+                                onClick={() => removePlayer(side, player.id)}
+                                className="text-red-300 hover:text-red-600"
+                            >
+                                ×
+                            </button>
+                        )}
+                    </div>
+                </div>
+            ))}
+
+            {!isLocked && (
+                <button
+                    onClick={() => addPlayer(side)}
+                    className="w-full py-4 text-xs text-gray-400 font-bold hover:bg-gray-50 transition border-t border-dashed"
+                >
+                    + 타순 추가
+                </button>
+            )}
+        </div>
+    );
+};
+
+const Lineup = () => {
+    const [searchParams] = useSearchParams();
+    const dateId =
+        searchParams.get("date") || new Date().toISOString().split("T")[0];
+
+    const [isLocked, setIsLocked] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [exists, setExists] = useState(false);
+    const [dbPlayers, setDbPlayers] = useState<any[]>([]);
+    const [awayLineup, setAwayLineup] = useState<Player[]>([]);
+    const [homeLineup, setHomeLineup] = useState<Player[]>([]);
+
+    useEffect(() => {
+        const init = async () => {
+            setLoading(true);
+            try {
+                // 1. DB 선수 데이터 로드
+                const playerSnap = await getDocs(collection(db, "players"));
+                setDbPlayers(
+                    playerSnap.docs.map((doc) => ({
+                        id: doc.id,
+                        ...doc.data(),
+                    })),
+                );
+
+                // 2. 라인업 데이터 로드
+                const docSnap = await getDoc(doc(db, "lineups", dateId));
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setAwayLineup(data.awayLineup || []);
+                    setHomeLineup(data.homeLineup || []);
+                    setIsLocked(data.isLocked || false);
+                    setExists(true);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        init();
+    }, [dateId]);
+
+    const handleUpdate = (
+        side: "away" | "home",
+        id: number,
+        updates: Partial<Player>,
+    ) => {
+        const setter = side === "away" ? setAwayLineup : setHomeLineup;
+        setter((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+        );
+    };
+
+    const saveToFirebase = async (lockState: boolean) => {
+        await setDoc(doc(db, "lineups", dateId), {
+            awayLineup,
+            homeLineup,
+            isLocked: lockState,
+            updatedAt: Timestamp.now(),
+        });
+    };
+
+    const addPlayer = (side: "away" | "home") => {
+        const setter = side === "away" ? setAwayLineup : setHomeLineup;
+        setter((prev) => [
+            ...prev,
+            { id: Date.now(), order: prev.length + 1, name: "", position: "" },
+        ]);
+    };
+
+    const removePlayer = (side: "away" | "home", id: number) => {
+        const setter = side === "away" ? setAwayLineup : setHomeLineup;
+        setter((prev) =>
+            prev
+                .filter((p) => p.id !== id)
+                .map((p, i) => ({ ...p, order: i + 1 })),
+        );
+    };
+
+    const createGame = async () => {
+        const init = () =>
+            Array.from({ length: 9 }, (_, i) => ({
+                id: Math.random(),
+                order: i + 1,
+                name: "",
+                position: "",
+            }));
+        const a = init();
+        const h = init();
+        await setDoc(doc(db, "lineups", dateId), {
+            awayLineup: a,
+            homeLineup: h,
+            isLocked: false,
+            updatedAt: Timestamp.now(),
+        });
+        setAwayLineup(a);
+        setHomeLineup(h);
+        setExists(true);
+    };
+
+    if (loading)
+        return (
+            <div className="p-20 text-center font-bold text-gray-400">
+                Loading...
+            </div>
+        );
+
+    return (
+        <div className="min-h-screen bg-gray-100 p-4 pb-20 font-sans">
+            <div className="max-w-5xl mx-auto">
+                <div className="text-center mb-10">
+                    <p className="text-blue-600 font-bold tracking-widest text-sm mb-1 uppercase">
+                        {dateId}
+                    </p>
+                    <h1 className="text-4xl font-black italic text-gray-900 uppercase tracking-tighter">
+                        Match Lineup
+                    </h1>
+                    <div className="h-1.5 w-16 bg-blue-600 mx-auto mt-3"></div>
+                </div>
+
+                {!exists ? (
+                    <div className="bg-white rounded-3xl p-16 text-center border-2 border-dashed">
+                        <button
+                            onClick={createGame}
+                            className="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black text-xl"
+                        >
+                            라인업 생성하기
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <div className="flex flex-wrap gap-8 justify-center">
+                            <LineupCard
+                                title="Coupang daylaborers"
+                                lineup={awayLineup}
+                                side="away"
+                                bgColor="bg-slate-700"
+                                isLocked={isLocked}
+                                handleUpdate={handleUpdate}
+                                addPlayer={addPlayer}
+                                removePlayer={removePlayer}
+                                dbPlayers={dbPlayers}
+                            />
+                            <LineupCard
+                                title="Daegu Yongkids"
+                                lineup={homeLineup}
+                                side="home"
+                                bgColor="bg-blue-800"
+                                isLocked={isLocked}
+                                handleUpdate={handleUpdate}
+                                addPlayer={addPlayer}
+                                removePlayer={removePlayer}
+                                dbPlayers={dbPlayers}
+                            />
+                        </div>
+                        <div className="mt-12 max-w-md mx-auto">
+                            <button
+                                onClick={() => {
+                                    setIsLocked(!isLocked);
+                                    saveToFirebase(!isLocked);
+                                }}
+                                className={`w-full py-5 rounded-2xl font-black text-xl shadow-2xl transition ${isLocked ? "bg-gray-900 text-white" : "bg-red-600 text-white"}`}
+                            >
+                                {isLocked
+                                    ? "🔄 라인업 수정하기"
+                                    : "✅ 라인업 확정 및 저장"}
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};
 
 export default Lineup;

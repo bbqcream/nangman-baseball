@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { db } from "../firebase/firebase";
+import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 
-// 요청하신 수비 위치 옵션
 const POSITIONS = [
     "투수",
     "1루수",
@@ -19,7 +20,8 @@ interface Player {
 }
 
 const Lineup = () => {
-    // 오늘 날짜
+    const [isLocked, setIsLocked] = useState(false);
+    const [loading, setLoading] = useState(true);
     const today = new Date().toLocaleDateString("ko-KR", {
         year: "numeric",
         month: "long",
@@ -27,7 +29,9 @@ const Lineup = () => {
         weekday: "short",
     });
 
-    // 초기 5명 생성 함수 (고정석)
+    // DB 문서 ID로 사용할 날짜 (예: 2024-05-20)
+    const dateId = new Date().toISOString().split("T")[0];
+
     const createInitialLineup = () =>
         Array.from({ length: 5 }, (_, i) => ({
             id: Math.random(),
@@ -43,7 +47,55 @@ const Lineup = () => {
         createInitialLineup(),
     );
 
-    // 선수 추가 (5번 이후)
+    // --- 1. 데이터 불러오기 (Read) ---
+    useEffect(() => {
+        const fetchLineup = async () => {
+            try {
+                const docRef = doc(db, "lineups", dateId);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setAwayLineup(data.awayLineup);
+                    setHomeLineup(data.homeLineup);
+                    setIsLocked(data.isLocked || false);
+                }
+            } catch (e) {
+                console.error("데이터 로드 실패:", e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchLineup();
+    }, [dateId]);
+
+    // --- 2. 데이터 저장하기 (Write/Update) ---
+    const saveToFirebase = async (lockState: boolean) => {
+        try {
+            await setDoc(doc(db, "lineups", dateId), {
+                awayLineup,
+                homeLineup,
+                isLocked: lockState,
+                updatedAt: Timestamp.now(),
+            });
+            alert(
+                lockState
+                    ? "라인업이 확정되어 저장되었습니다."
+                    : "수정 모드로 전환되었습니다.",
+            );
+        } catch (e) {
+            console.error("저장 실패:", e);
+            alert("저장 중 오류가 발생했습니다.");
+        }
+    };
+
+    const toggleLock = async () => {
+        const nextState = !isLocked;
+        setIsLocked(nextState);
+        await saveToFirebase(nextState); // 상태 변경 시 자동으로 DB 반영
+    };
+
+    // 기존 업데이트 로직들
     const addPlayer = (side: "away" | "home") => {
         const setter = side === "away" ? setAwayLineup : setHomeLineup;
         const current = side === "away" ? awayLineup : homeLineup;
@@ -58,7 +110,6 @@ const Lineup = () => {
         ]);
     };
 
-    // 선수 삭제 (6번부터 가능)
     const removePlayer = (side: "away" | "home", id: number) => {
         const setter = side === "away" ? setAwayLineup : setHomeLineup;
         const current = side === "away" ? awayLineup : homeLineup;
@@ -79,100 +130,16 @@ const Lineup = () => {
         );
     };
 
-    // 라인업 카드 렌더링 컴포넌트
-    const LineupCard = ({
-        title,
-        lineup,
-        side,
-        bgColor,
-    }: {
-        title: string;
-        lineup: Player[];
-        side: "away" | "home";
-        bgColor: string;
-    }) => (
-        <div className="flex-1 min-w-[350px] bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-            <div
-                className={`${bgColor} text-white p-3 text-center font-black text-xl tracking-widest`}
-            >
-                {title}
+    if (loading)
+        return (
+            <div className="p-10 text-center font-bold">
+                라인업 불러오는 중...
             </div>
-            <div className="grid grid-cols-12 bg-gray-50 border-b text-center font-bold text-xs py-2 text-gray-500">
-                <div className="col-span-2">타순</div>
-                <div className="col-span-5">선수명</div>
-                <div className="col-span-4">수비</div>
-                <div className="col-span-1"></div>
-            </div>
-            {lineup.map((player) => (
-                <div
-                    key={player.id}
-                    className="grid grid-cols-12 items-center border-b border-gray-50 p-2 gap-1"
-                >
-                    <div className="col-span-2 text-center font-black text-blue-900">
-                        {player.order}
-                    </div>
-                    <div className="col-span-5">
-                        <input
-                            type="text"
-                            value={player.name}
-                            placeholder="이름"
-                            onChange={(e) =>
-                                handleUpdate(
-                                    side,
-                                    player.id,
-                                    "name",
-                                    e.target.value,
-                                )
-                            }
-                            className="w-full p-1.5 bg-gray-50 border-none rounded-md text-sm font-bold focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
-                    <div className="col-span-4">
-                        <select
-                            value={player.position}
-                            onChange={(e) =>
-                                handleUpdate(
-                                    side,
-                                    player.id,
-                                    "position",
-                                    e.target.value,
-                                )
-                            }
-                            className="w-full p-1.5 text-xs border-none bg-gray-100 rounded-md appearance-none"
-                        >
-                            <option value="">선택</option>
-                            {POSITIONS.map((pos) => (
-                                <option key={pos} value={pos}>
-                                    {pos}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="col-span-1 text-center">
-                        {player.order > 5 && (
-                            <button
-                                onClick={() => removePlayer(side, player.id)}
-                                className="text-red-300 text-lg"
-                            >
-                                ×
-                            </button>
-                        )}
-                    </div>
-                </div>
-            ))}
-            <button
-                onClick={() => addPlayer(side)}
-                className="w-full py-3 text-sm text-gray-400 font-bold hover:bg-gray-50 transition border-t border-dashed"
-            >
-                + 타순 추가
-            </button>
-        </div>
-    );
+        );
 
     return (
         <div className="min-h-screen bg-gray-100 p-4 pb-20">
             <div className="max-w-5xl mx-auto">
-                {/* 상단 정보 */}
                 <div className="text-center mb-8">
                     <p className="text-blue-600 font-bold tracking-tighter">
                         {today}
@@ -183,31 +150,143 @@ const Lineup = () => {
                     <div className="h-1 w-20 bg-blue-600 mx-auto mt-2"></div>
                 </div>
 
-                {/* 양 팀 라인업 보드 */}
                 <div className="flex flex-wrap gap-6 justify-center">
                     <LineupCard
-                        title="AWAY TEAM"
+                        title="쿠팡 일용직스"
                         lineup={awayLineup}
                         side="away"
                         bgColor="bg-gray-700"
+                        isLocked={isLocked}
+                        handleUpdate={handleUpdate}
+                        addPlayer={addPlayer}
+                        removePlayer={removePlayer}
                     />
                     <LineupCard
-                        title="HOME TEAM"
+                        title="Daegu Yongkids"
                         lineup={homeLineup}
                         side="home"
                         bgColor="bg-blue-800"
+                        isLocked={isLocked}
+                        handleUpdate={handleUpdate}
+                        addPlayer={addPlayer}
+                        removePlayer={removePlayer}
                     />
                 </div>
 
-                {/* 하단 액션 */}
                 <div className="mt-10 max-w-md mx-auto">
-                    <button className="w-full bg-red-600 text-white py-4 rounded-xl font-black text-xl shadow-lg hover:bg-red-700 active:scale-95 transition transform">
-                        경기 시작 / 라인업 확정
+                    <button
+                        onClick={toggleLock}
+                        className={`w-full py-4 rounded-xl font-black text-xl shadow-lg transition transform active:scale-95 ${
+                            isLocked
+                                ? "bg-gray-800 text-white hover:bg-gray-900"
+                                : "bg-red-600 text-white hover:bg-red-700"
+                        }`}
+                    >
+                        {isLocked
+                            ? "🔄 라인업 수정하기"
+                            : "✅ 라인업 확정 및 저장"}
                     </button>
                 </div>
             </div>
         </div>
     );
 };
+
+// LineupCard 컴포넌트는 이전과 동일 (바깥에 위치해야 함)
+const LineupCard = ({
+    title,
+    lineup,
+    side,
+    bgColor,
+    isLocked,
+    handleUpdate,
+    addPlayer,
+    removePlayer,
+}: any) => (
+    // ... 이전 코드와 동일 ...
+    <div
+        className={`flex-1 min-w-[350px] bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden ${isLocked ? "opacity-90" : ""}`}
+    >
+        <div
+            className={`${bgColor} text-white p-3 text-center font-black text-xl tracking-widest`}
+        >
+            {title} {isLocked && "🔒"}
+        </div>
+        {/* ... 이하 생략 (이전 코드와 동일하게 input에 disabled={isLocked} 적용) ... */}
+        <div className="grid grid-cols-12 bg-gray-50 border-b text-center font-bold text-xs py-2 text-gray-500">
+            <div className="col-span-2">타순</div>
+            <div className="col-span-5">선수명</div>
+            <div className="col-span-4">수비</div>
+            <div className="col-span-1"></div>
+        </div>
+        {lineup.map((player: any) => (
+            <div
+                key={player.id}
+                className="grid grid-cols-12 items-center border-b border-gray-100 p-2 gap-1"
+            >
+                <div className="col-span-2 text-center font-black text-blue-900">
+                    {player.order}
+                </div>
+                <div className="col-span-5">
+                    <input
+                        type="text"
+                        value={player.name}
+                        disabled={isLocked}
+                        placeholder={isLocked ? "" : "이름"}
+                        onChange={(e) =>
+                            handleUpdate(
+                                side,
+                                player.id,
+                                "name",
+                                e.target.value,
+                            )
+                        }
+                        className={`w-full p-1.5 rounded-md text-sm font-bold ${isLocked ? "bg-transparent border-none" : "bg-gray-50"}`}
+                    />
+                </div>
+                <div className="col-span-4">
+                    <select
+                        value={player.position}
+                        disabled={isLocked}
+                        onChange={(e) =>
+                            handleUpdate(
+                                side,
+                                player.id,
+                                "position",
+                                e.target.value,
+                            )
+                        }
+                        className={`w-full p-1.5 text-xs rounded-md appearance-none ${isLocked ? "bg-transparent border-none" : "bg-gray-100"}`}
+                    >
+                        <option value="">선택</option>
+                        {POSITIONS.map((pos) => (
+                            <option key={pos} value={pos}>
+                                {pos}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="col-span-1 text-center">
+                    {!isLocked && player.order > 5 && (
+                        <button
+                            onClick={() => removePlayer(side, player.id)}
+                            className="text-red-300 text-lg"
+                        >
+                            ×
+                        </button>
+                    )}
+                </div>
+            </div>
+        ))}
+        {!isLocked && (
+            <button
+                onClick={() => addPlayer(side)}
+                className="w-full py-3 text-sm text-gray-400 font-bold hover:bg-gray-50 transition border-t border-dashed"
+            >
+                + 타순 추가
+            </button>
+        )}
+    </div>
+);
 
 export default Lineup;

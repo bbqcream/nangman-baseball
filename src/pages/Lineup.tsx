@@ -29,7 +29,6 @@ const Lineup = () => {
         weekday: "short",
     });
 
-    // DB 문서 ID로 사용할 날짜 (예: 2024-05-20)
     const dateId = new Date().toISOString().split("T")[0];
 
     const createInitialLineup = () =>
@@ -78,11 +77,6 @@ const Lineup = () => {
                 isLocked: lockState,
                 updatedAt: Timestamp.now(),
             });
-            alert(
-                lockState
-                    ? "라인업이 확정되어 저장되었습니다."
-                    : "수정 모드로 전환되었습니다.",
-            );
         } catch (e) {
             console.error("저장 실패:", e);
             alert("저장 중 오류가 발생했습니다.");
@@ -182,9 +176,7 @@ const Lineup = () => {
                                 : "bg-red-600 text-white hover:bg-red-700"
                         }`}
                     >
-                        {isLocked
-                            ? "🔄 라인업 수정하기"
-                            : "✅ 라인업 확정 및 저장"}
+                        {isLocked ? "라인업 수정하기" : "라인업 확정 및 저장"}
                     </button>
                 </div>
             </div>
@@ -203,7 +195,6 @@ const LineupCard = ({
     addPlayer,
     removePlayer,
 }: any) => (
-    // ... 이전 코드와 동일 ...
     <div
         className={`flex-1 min-w-[350px] bg-white border-2 border-gray-200 rounded-2xl shadow-sm overflow-hidden ${isLocked ? "opacity-90" : ""}`}
     >

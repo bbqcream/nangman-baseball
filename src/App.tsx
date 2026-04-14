@@ -5,6 +5,7 @@ import Record from "./pages/Record";
 import Edit from "./pages/Edit";
 import RecordEdit from "./pages/RecordEdit";
 import TeamRecord from "./pages/TeamRecord";
+import Lineup from "./pages/Lineup";
 
 const App: React.FC = () => {
     return (
@@ -12,6 +13,12 @@ const App: React.FC = () => {
             <nav className="p-4 bg-blue-900 text-white flex gap-6 font-semibold shadow-md">
                 <Link to="/" className="hover:text-blue-300 transition-colors">
                     홈 (선수 목록)
+                </Link>
+                <Link
+                    to="/lineup"
+                    className="hover:text-blue-300 transition-colors"
+                >
+                    라인업
                 </Link>
                 <Link
                     to="/record"
@@ -40,6 +47,7 @@ const App: React.FC = () => {
                     <Route path="/edit" element={<Edit />} />
                     <Route path="/record-edit" element={<RecordEdit />} />
                     <Route path="/team-record" element={<TeamRecord />} />
+                    <Route path="/lineup" element={<Lineup />} />
                 </Routes>
             </main>
         </Router>

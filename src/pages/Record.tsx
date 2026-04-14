@@ -177,7 +177,7 @@ const Record: React.FC = () => {
                                             <p className="text-[11px] text-slate-500">
                                                 {selected.teamId === "coupang"
                                                     ? "쿠팡 일용직스"
-                                                    : "Daegu Yongkids"}
+                                                    : "대구 용키즈"}
                                             </p>
                                         </div>
                                     </div>

@@ -10,22 +10,31 @@ import {
 } from "firebase/firestore";
 import { useSearchParams } from "react-router-dom";
 
-// 포지션 정의
+// 포지션 정의 (원본 유지)
 const POSITIONS = [
     "투수",
     "1루수",
     "2루수",
     "유격수",
     "3루수",
-    "외야수",
+    "포수",
     "지명타자",
 ];
 
-// --- 통계 계산 유틸리티 (제공해주신 로직 반영) ---
+// 출력용 약어 및 스타일 매핑
+const POSITION_MAP: { [key: string]: { abbr: string; color: string } } = {
+    투수: { abbr: "P", color: "text-red-600 font-black" },
+    "1루수": { abbr: "1B", color: "text-gray-700" },
+    "2루수": { abbr: "2B", color: "text-gray-700" },
+    "3루수": { abbr: "3B", color: "text-gray-700" },
+    유격수: { abbr: "SS", color: "text-gray-700" },
+    포수: { abbr: "C", color: "text-gray-700" },
+    지명타자: { abbr: "DH", color: "text-gray-700" },
+};
+
+// --- 통계 계산 유틸리티 ---
 const getStatLabel = (p: any) => {
     if (!p) return "";
-
-    // OPS 계산 (공통)
     const { batting } = p;
     let opsStr = "OPS 0.000";
     if (batting && batting.atBats > 0) {
@@ -89,117 +98,148 @@ const LineupCard = ({
                 <div className="col-span-1"></div>
             </div>
 
-            {lineup.map((player: Player) => (
-                <div
-                    key={player.id}
-                    className="grid grid-cols-12 items-center border-b border-gray-50 p-2 gap-1 relative group"
-                >
-                    <div className="col-span-1 text-center font-black text-blue-900 text-lg">
-                        {player.order}
-                    </div>
+            {lineup.map((player: Player) => {
+                // 현재 포지션의 스타일 정보 가져오기
+                const posInfo = POSITION_MAP[player.position] || {
+                    abbr: player.position,
+                    color: "text-gray-400",
+                };
+                const isPitcher = player.position === "투수";
 
-                    <div className="col-span-6 relative">
-                        <input
-                            type="text"
-                            value={
-                                isLocked
-                                    ? player.name
-                                        ? `${player.name} (${player.statLabel || ""})`
-                                        : ""
-                                    : (searchTerm[player.id] ?? player.name)
-                            }
-                            disabled={isLocked}
-                            placeholder="선수 검색"
-                            onChange={(e) => {
-                                setSearchTerm({
-                                    ...searchTerm,
-                                    [player.id]: e.target.value,
-                                });
-                                setShowDropdown(player.id);
-                            }}
-                            className={`w-full p-2 rounded-lg text-sm font-bold ${isLocked ? "bg-transparent border-none text-gray-800" : "bg-blue-50 outline-none"}`}
-                        />
+                return (
+                    <div
+                        key={player.id}
+                        className="grid grid-cols-12 items-center border-b border-gray-50 p-2 gap-1 relative group"
+                    >
+                        <div className="col-span-1 text-center font-black text-blue-900 text-lg">
+                            {player.order}
+                        </div>
 
-                        {!isLocked &&
-                            showDropdown === player.id &&
-                            searchTerm[player.id] && (
-                                <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-2xl max-h-48 overflow-y-auto mt-1">
-                                    {dbPlayers
-                                        .filter((p: any) =>
-                                            p.name.includes(
-                                                searchTerm[player.id],
-                                            ),
-                                        )
-                                        .map((p: any) => {
-                                            const stat = getStatLabel(p);
-                                            return (
-                                                <div
-                                                    key={p.id}
-                                                    className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center border-b last:border-none"
-                                                    onClick={() => {
-                                                        handleUpdate(
-                                                            side,
-                                                            player.id,
-                                                            {
-                                                                name: p.name,
-                                                                position:
-                                                                    p.position ||
-                                                                    "",
-                                                                statLabel: stat,
-                                                            },
-                                                        );
-                                                        setSearchTerm({
-                                                            ...searchTerm,
-                                                            [player.id]: p.name,
-                                                        });
-                                                        setShowDropdown(null);
-                                                    }}
-                                                >
-                                                    <span className="font-bold text-sm">
-                                                        {p.name}
-                                                    </span>
-                                                    <span className="text-blue-600 font-black text-[10px]">
-                                                        {stat}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                </div>
+                        <div className="col-span-6 relative">
+                            <input
+                                type="text"
+                                value={
+                                    isLocked
+                                        ? player.name
+                                            ? `${player.name} (${player.statLabel || ""})`
+                                            : ""
+                                        : (searchTerm[player.id] ?? player.name)
+                                }
+                                disabled={isLocked}
+                                placeholder="선수 검색"
+                                onChange={(e) => {
+                                    setSearchTerm({
+                                        ...searchTerm,
+                                        [player.id]: e.target.value,
+                                    });
+                                    setShowDropdown(player.id);
+                                }}
+                                className={`w-full p-2 rounded-lg text-sm font-bold ${isLocked ? "bg-transparent border-none text-gray-800" : "bg-blue-50 outline-none"}`}
+                            />
+
+                            {!isLocked &&
+                                showDropdown === player.id &&
+                                searchTerm[player.id] && (
+                                    <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-2xl max-h-48 overflow-y-auto mt-1">
+                                        {dbPlayers
+                                            .filter((p: any) =>
+                                                p.name.includes(
+                                                    searchTerm[player.id],
+                                                ),
+                                            )
+                                            .map((p: any) => {
+                                                const stat = getStatLabel(p);
+                                                return (
+                                                    <div
+                                                        key={p.id}
+                                                        className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center border-b last:border-none"
+                                                        onClick={() => {
+                                                            handleUpdate(
+                                                                side,
+                                                                player.id,
+                                                                {
+                                                                    name: p.name,
+                                                                    position:
+                                                                        p.position ||
+                                                                        "",
+                                                                    statLabel:
+                                                                        stat,
+                                                                },
+                                                            );
+                                                            setSearchTerm({
+                                                                ...searchTerm,
+                                                                [player.id]:
+                                                                    p.name,
+                                                            });
+                                                            setShowDropdown(
+                                                                null,
+                                                            );
+                                                        }}
+                                                    >
+                                                        <span className="font-bold text-sm">
+                                                            {p.name}
+                                                        </span>
+                                                        <span className="text-blue-600 font-black text-[10px]">
+                                                            {stat}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                )}
+                        </div>
+
+                        <div className="col-span-4 text-center">
+                            {isLocked ? (
+                                // 잠금 상태: 약어로 표시 + 투수일 경우 빨간색/볼드 적용
+                                <span
+                                    className={`text-sm font-bold ${posInfo.color}`}
+                                >
+                                    {posInfo.abbr}
+                                </span>
+                            ) : (
+                                <select
+                                    value={player.position}
+                                    onChange={(e) =>
+                                        handleUpdate(side, player.id, {
+                                            position: e.target.value,
+                                        })
+                                    }
+                                    className={`w-full p-2 text-xs rounded-lg appearance-none bg-gray-100 font-bold ${isPitcher ? "text-red-600" : "text-gray-700"}`}
+                                >
+                                    <option value="">선택</option>
+                                    {POSITIONS.map((pos) => (
+                                        <option
+                                            key={pos}
+                                            value={pos}
+                                            className={
+                                                pos === "투수"
+                                                    ? "font-bold text-red-600"
+                                                    : ""
+                                            }
+                                        >
+                                            {pos} ({POSITION_MAP[pos]?.abbr})
+                                        </option>
+                                    ))}
+                                </select>
                             )}
-                    </div>
+                        </div>
 
-                    <div className="col-span-4">
-                        <select
-                            value={player.position}
-                            disabled={isLocked}
-                            onChange={(e) =>
-                                handleUpdate(side, player.id, {
-                                    position: e.target.value,
-                                })
-                            }
-                            className={`w-full p-2 text-xs rounded-lg appearance-none ${isLocked ? "bg-transparent border-none font-bold text-gray-600 text-center" : "bg-gray-100"}`}
-                        >
-                            <option value="">선택</option>
-                            {POSITIONS.map((pos) => (
-                                <option key={pos} value={pos}>
-                                    {pos}
-                                </option>
-                            ))}
-                        </select>
+                        <div className="col-span-1 text-center">
+                            {!isLocked && player.order > 5 && (
+                                <button
+                                    onClick={() =>
+                                        removePlayer(side, player.id)
+                                    }
+                                    className="text-red-300 hover:text-red-600"
+                                >
+                                    ×
+                                </button>
+                            )}
+                        </div>
                     </div>
-
-                    <div className="col-span-1 text-center">
-                        {!isLocked && player.order > 5 && (
-                            <button
-                                onClick={() => removePlayer(side, player.id)}
-                                className="text-red-300 hover:text-red-600"
-                            >
-                                ×
-                            </button>
-                        )}
-                    </div>
-                </div>
-            ))}
+                );
+            })}
 
             {!isLocked && (
                 <button
@@ -229,7 +269,6 @@ const Lineup = () => {
         const init = async () => {
             setLoading(true);
             try {
-                // 1. DB 선수 데이터 로드
                 const playerSnap = await getDocs(collection(db, "players"));
                 setDbPlayers(
                     playerSnap.docs.map((doc) => ({
@@ -238,7 +277,6 @@ const Lineup = () => {
                     })),
                 );
 
-                // 2. 라인업 데이터 로드
                 const docSnap = await getDoc(doc(db, "lineups", dateId));
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -358,7 +396,7 @@ const Lineup = () => {
                                 dbPlayers={dbPlayers}
                             />
                             <LineupCard
-                                title="Daegu Yongkids"
+                                title="대구 용키즈"
                                 lineup={homeLineup}
                                 side="home"
                                 bgColor="bg-blue-800"

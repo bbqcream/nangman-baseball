@@ -113,9 +113,9 @@ const Record: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 min-h-[600px]">
+                <div className="flex border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 min-h-150">
                     {/* 사이드바: 랭킹 리스트 */}
-                    <div className="w-64 flex-shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col">
+                    <div className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col">
                         <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
                             <span className={labelCls}>
                                 {mode === "hitter"

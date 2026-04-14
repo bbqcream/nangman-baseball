@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 
 interface Game {
@@ -179,7 +179,7 @@ const TeamRecord: React.FC = () => {
 
                 <div className="flex gap-3">
                     {/* 좌측: 경기 추가 폼 + 요약 */}
-                    <div className="w-72 flex-shrink-0 space-y-3">
+                    <div className="w-72 shrink-0 space-y-3">
                         {/* 승률 요약 카드 */}
                         {data && (
                             <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 p-5">

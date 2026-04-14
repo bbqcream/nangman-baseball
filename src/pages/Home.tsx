@@ -40,7 +40,7 @@ const Home: React.FC = () => {
     const selectedPlayer = players.find((p) => p.id === selected) ?? null;
 
     return (
-        <div className="min-h-screen bg-[var(--color-background-tertiary,#f9f9f8)] p-6">
+        <div className="min-h-screen bg-(--color-background-tertiary,#f9f9f8) p-6">
             <div className="max-w-6xl mx-auto">
                 {/* 페이지 타이틀 */}
                 <div className="mb-5">
@@ -143,7 +143,7 @@ const Home: React.FC = () => {
                                                 <div className="flex items-center gap-2.5">
                                                     <div
                                                         className={[
-                                                            "w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium flex-shrink-0",
+                                                            "w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium shrink-0",
                                                             isCoupang
                                                                 ? "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                                                                 : "bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
@@ -189,7 +189,7 @@ const Home: React.FC = () => {
                                             {/* 바 차트 */}
                                             <td className="px-5 py-3">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="flex-1 h-[3px] bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                    <div className="flex-1 h-0.75 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                                                         <div
                                                             className={`h-full rounded-full ${isCoupang ? "bg-amber-500" : "bg-blue-500"}`}
                                                             style={{
@@ -210,7 +210,7 @@ const Home: React.FC = () => {
                     </div>
 
                     {/* 우측: 디테일 패널 */}
-                    <div className="w-72 flex-shrink-0">
+                    <div className="w-72 shrink-0">
                         {selectedPlayer ? (
                             <DetailPanel player={selectedPlayer} />
                         ) : (
@@ -248,7 +248,7 @@ const DetailPanel: React.FC<{ player: Player }> = ({ player }) => {
                 <div className="flex items-center gap-3 mb-1">
                     <div
                         className={[
-                            "w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-medium flex-shrink-0",
+                            "w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-medium shrink-0",
                             isCoupang
                                 ? "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                                 : "bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-300",

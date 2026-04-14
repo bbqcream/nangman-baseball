@@ -107,9 +107,9 @@ const Edit: React.FC = () => {
                     </h1>
                 </div>
 
-                <div className="flex gap-3 h-[680px]">
+                <div className="flex gap-3 h-170">
                     {/* 좌측: 선수 목록 */}
-                    <div className="w-64 flex-shrink-0 flex flex-col border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                    <div className="w-64 shrink-0 flex flex-col border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
                         <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                             <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">
                                 Active Roster
@@ -140,7 +140,7 @@ const Edit: React.FC = () => {
                                     >
                                         <div
                                             className={[
-                                                "w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium flex-shrink-0",
+                                                "w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium shrink-0",
                                                 isCoupang
                                                     ? "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                                                     : "bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
@@ -152,7 +152,7 @@ const Edit: React.FC = () => {
                                             <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate flex items-center gap-1.5">
                                                 {p.name}
                                                 {p.isManager && (
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-teal-500 inline-block flex-shrink-0" />
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-teal-500 inline-block shrink-0" />
                                                 )}
                                             </p>
                                             <p className="text-[11px] text-slate-400 truncate">
@@ -321,7 +321,7 @@ const Edit: React.FC = () => {
                                             <div className="flex items-center gap-3 p-4 border border-slate-100 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-800/40">
                                                 <div
                                                     className={[
-                                                        "w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-medium flex-shrink-0",
+                                                        "w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-medium shrink-0",
                                                         selectedPlayer.teamId ===
                                                         "coupang"
                                                             ? "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"

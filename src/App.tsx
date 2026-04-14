@@ -32,12 +32,6 @@ const App: React.FC = () => {
                 >
                     팀 순위
                 </Link>
-                <Link
-                    to="/edit"
-                    className="hover:text-blue-300 transition-colors"
-                >
-                    기록 관리
-                </Link>
             </nav>
 
             <main className="min-h-screen bg-gray-50 p-6">

@@ -10,6 +10,14 @@ import {
 } from "firebase/firestore";
 import { useSearchParams } from "react-router-dom";
 
+// --- 시간 체크 유틸리티 ---
+const checkIsTimeOut = () => {
+    const now = new Date();
+    // 한국 시간 기준으로 체크 (서버 시간이 UTC일 경우를 대비해 현지 시간 활용)
+    const hour = now.getHours();
+    return hour >= 17; // 17시(오후 5시) 이상이면 true
+};
+
 const POSITIONS = [
     "투수",
     "1루수",
@@ -242,6 +250,7 @@ const Lineup = () => {
     const dateId =
         searchParams.get("date") || new Date().toISOString().split("T")[0];
     const [isLocked, setIsLocked] = useState(false);
+    const [isTimeOut, setIsTimeOut] = useState(false); // 5시 경과 여부 상태 추가
     const [loading, setLoading] = useState(true);
     const [exists, setExists] = useState(false);
     const [dbPlayers, setDbPlayers] = useState<any[]>([]);
@@ -251,6 +260,10 @@ const Lineup = () => {
     useEffect(() => {
         const init = async () => {
             try {
+                // 1. 시간 확인
+                const timeOut = checkIsTimeOut();
+                setIsTimeOut(timeOut);
+
                 const playerSnap = await getDocs(collection(db, "players"));
                 setDbPlayers(
                     playerSnap.docs.map((doc) => ({
@@ -263,7 +276,8 @@ const Lineup = () => {
                     const data = docSnap.data();
                     setAwayLineup(data.awayLineup || []);
                     setHomeLineup(data.homeLineup || []);
-                    setIsLocked(data.isLocked || false);
+                    // DB 설정이 풀려있더라도 시간이 지났으면 강제로 Lock
+                    setIsLocked(timeOut ? true : data.isLocked || false);
                     setExists(true);
                 }
             } catch (e) {
@@ -276,6 +290,7 @@ const Lineup = () => {
     }, [dateId]);
 
     const handleUpdate = (side: "away" | "home", id: number, updates: any) => {
+        if (checkIsTimeOut()) return; // 시간 초과 시 업데이트 차단
         const setter = side === "away" ? setAwayLineup : setHomeLineup;
         setter((prev) =>
             prev.map((p) => (p.id === id ? { ...p, ...updates } : p)),
@@ -283,6 +298,10 @@ const Lineup = () => {
     };
 
     const saveToFirebase = async (lockState: boolean) => {
+        if (checkIsTimeOut()) {
+            alert("오후 5시 이후에는 라인업을 수정할 수 없습니다.");
+            return;
+        }
         await setDoc(doc(db, "lineups", dateId), {
             awayLineup,
             homeLineup,
@@ -292,6 +311,7 @@ const Lineup = () => {
     };
 
     const addPlayer = (side: "away" | "home") => {
+        if (checkIsTimeOut()) return;
         const setter = side === "away" ? setAwayLineup : setHomeLineup;
         setter((prev) => [
             ...prev,
@@ -300,6 +320,7 @@ const Lineup = () => {
     };
 
     const removePlayer = (side: "away" | "home", id: number) => {
+        if (checkIsTimeOut()) return;
         const setter = side === "away" ? setAwayLineup : setHomeLineup;
         setter((prev) =>
             prev
@@ -309,6 +330,10 @@ const Lineup = () => {
     };
 
     const createGame = async () => {
+        if (checkIsTimeOut()) {
+            alert("오후 5시 이후에는 새로운 라인업을 생성할 수 없습니다.");
+            return;
+        }
         const init = () =>
             Array.from({ length: 9 }, (_, i) => ({
                 id: Math.random(),
@@ -346,13 +371,15 @@ const Lineup = () => {
                     <h1 className="text-4xl font-black italic text-gray-900 uppercase tracking-tighter">
                         Match Lineup
                     </h1>
+                    {/* 5시 이후 경고 문구 추가 */}
                     <div className="h-1.5 w-16 bg-blue-600 mx-auto mt-3"></div>
                 </div>
                 {!exists ? (
                     <div className="bg-white rounded-3xl p-16 text-center border-2 border-dashed">
                         <button
                             onClick={createGame}
-                            className="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black text-xl"
+                            disabled={isTimeOut}
+                            className={`px-10 py-4 rounded-2xl font-black text-xl text-white ${isTimeOut ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600"}`}
                         >
                             라인업 생성하기
                         </button>
@@ -365,7 +392,7 @@ const Lineup = () => {
                                 lineup={awayLineup}
                                 side="away"
                                 bgColor="bg-slate-700"
-                                isLocked={isLocked}
+                                isLocked={isLocked || isTimeOut}
                                 handleUpdate={handleUpdate}
                                 addPlayer={addPlayer}
                                 removePlayer={removePlayer}
@@ -376,7 +403,7 @@ const Lineup = () => {
                                 lineup={homeLineup}
                                 side="home"
                                 bgColor="bg-blue-800"
-                                isLocked={isLocked}
+                                isLocked={isLocked || isTimeOut}
                                 handleUpdate={handleUpdate}
                                 addPlayer={addPlayer}
                                 removePlayer={removePlayer}
@@ -384,17 +411,21 @@ const Lineup = () => {
                             />
                         </div>
                         <div className="mt-12 max-w-md mx-auto">
-                            <button
-                                onClick={() => {
-                                    setIsLocked(!isLocked);
-                                    saveToFirebase(!isLocked);
-                                }}
-                                className={`w-full py-5 rounded-2xl font-black text-xl shadow-2xl transition ${isLocked ? "bg-gray-900 text-white" : "bg-red-600 text-white"}`}
-                            >
-                                {isLocked
-                                    ? "🔄 라인업 수정하기"
-                                    : "✅ 라인업 확정 및 저장"}
-                            </button>
+                            {!isTimeOut ? (
+                                <button
+                                    onClick={() => {
+                                        setIsLocked(!isLocked);
+                                        saveToFirebase(!isLocked);
+                                    }}
+                                    className={`w-full py-5 rounded-2xl font-black text-xl shadow-2xl transition ${isLocked ? "bg-gray-900 text-white" : "bg-red-600 text-white"}`}
+                                >
+                                    {isLocked
+                                        ? "🔄 라인업 수정하기"
+                                        : "✅ 라인업 확정 및 저장"}
+                                </button>
+                            ) : (
+                                <></>
+                            )}
                         </div>
                     </>
                 )}

@@ -388,7 +388,7 @@ const Lineup = () => {
                     <>
                         <div className="flex flex-wrap gap-8 justify-center">
                             <LineupCard
-                                title="Coupang daylaborers"
+                                title="Coupang slaves"
                                 lineup={awayLineup}
                                 side="away"
                                 bgColor="bg-slate-700"
@@ -399,7 +399,7 @@ const Lineup = () => {
                                 dbPlayers={dbPlayers}
                             />
                             <LineupCard
-                                title="대구 용키즈"
+                                title="Daegu Yongkids"
                                 lineup={homeLineup}
                                 side="home"
                                 bgColor="bg-blue-800"

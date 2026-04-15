@@ -5,7 +5,6 @@ import type { Player } from "../types/record-interface";
 
 type Mode = "hitter" | "pitcher";
 
-// 팀 정보 공통 관리
 const TEAM_INFO: Record<
     string,
     { label: string; dot: string; bg: string; text: string }
@@ -30,10 +29,182 @@ const TEAM_INFO: Record<
     },
 };
 
+const HITTER_RANKS = [
+    {
+        key: "bWar",
+        label: "WAR",
+        desc: "종합 기여도",
+        fmt: (v: number) => v.toFixed(2),
+    },
+    {
+        key: "ops",
+        label: "OPS",
+        desc: "출루+장타",
+        fmt: (v: number) => v.toFixed(3),
+    },
+    {
+        key: "avg",
+        label: "AVG",
+        desc: "타율",
+        fmt: (v: number) => v.toFixed(3),
+    },
+    {
+        key: "obp",
+        label: "OBP",
+        desc: "출루율",
+        fmt: (v: number) => v.toFixed(3),
+    },
+    {
+        key: "slg",
+        label: "SLG",
+        desc: "장타율",
+        fmt: (v: number) => v.toFixed(3),
+    },
+    { key: "hr", label: "HR", desc: "홈런", fmt: (v: number) => String(v) },
+    { key: "rbi", label: "RBI", desc: "타점", fmt: (v: number) => String(v) },
+    { key: "hits", label: "H", desc: "안타", fmt: (v: number) => String(v) },
+    { key: "runs", label: "R", desc: "득점", fmt: (v: number) => String(v) },
+    { key: "sb", label: "SB", desc: "도루", fmt: (v: number) => String(v) },
+] as const;
+
+const PITCHER_RANKS = [
+    {
+        key: "pWar",
+        label: "WAR",
+        desc: "종합 기여도",
+        fmt: (v: number) => v.toFixed(2),
+        asc: false,
+    },
+    {
+        key: "era",
+        label: "ERA",
+        desc: "평균자책점",
+        fmt: (v: number) => v.toFixed(2),
+        asc: true,
+    },
+    {
+        key: "whip",
+        label: "WHIP",
+        desc: "이닝당 출루",
+        fmt: (v: number) => v.toFixed(2),
+        asc: true,
+    },
+    {
+        key: "ip",
+        label: "IP",
+        desc: "이닝",
+        fmt: (v: number) => v.toFixed(1),
+        asc: false,
+    },
+    {
+        key: "so",
+        label: "K",
+        desc: "탈삼진",
+        fmt: (v: number) => String(v),
+        asc: false,
+    },
+    {
+        key: "wins",
+        label: "W",
+        desc: "승",
+        fmt: (v: number) => String(v),
+        asc: false,
+    },
+    {
+        key: "kper9",
+        label: "K/9",
+        desc: "9이닝당 탈삼",
+        fmt: (v: number) => v.toFixed(2),
+        asc: false,
+    },
+] as const;
+
+type HitterRankKey = (typeof HITTER_RANKS)[number]["key"];
+type PitcherRankKey = (typeof PITCHER_RANKS)[number]["key"];
+
+const calcStats = (p: Player) => {
+    const { batting: b, pitching: pi } = p;
+    const avg = b.atBats > 0 ? b.hits / b.atBats : 0;
+    const obp =
+        b.atBats + b.walks + b.hbp > 0
+            ? (b.hits + b.walks + b.hbp) / (b.atBats + b.walks + b.hbp)
+            : 0;
+    const singles = b.hits - (b.doubles + b.triples + b.homeRuns);
+    const slg =
+        b.atBats > 0
+            ? (singles + b.doubles * 2 + b.triples * 3 + b.homeRuns * 4) /
+              b.atBats
+            : 0;
+    const ops = obp + slg;
+    const bWar =
+        (b.rbi * 1.2 +
+            b.runs * 1.0 +
+            b.hits * 0.5 +
+            b.homeRuns * 2.5 -
+            (b.k || 0) * 0.15) /
+        10;
+    const era =
+        pi.inningsPitched > 0 ? (pi.earnedRuns * 9) / pi.inningsPitched : 99.99;
+    const whip =
+        pi.inningsPitched > 0
+            ? (((pi as any).walks || 0) + ((pi as any).hitsAllowed || 0)) /
+              pi.inningsPitched
+            : 99.99;
+    const kper9 =
+        pi.inningsPitched > 0 ? (pi.strikeouts * 9) / pi.inningsPitched : 0;
+    const pWar =
+        (pi.inningsPitched * 1.5 + pi.strikeouts * 0.5 - pi.earnedRuns * 1.2) /
+        10;
+
+    return {
+        avg,
+        obp,
+        slg,
+        ops,
+        bWar,
+        hr: b.homeRuns,
+        rbi: b.rbi,
+        hits: b.hits,
+        runs: b.runs,
+        sb: (b as any).sb || 0,
+        era,
+        whip,
+        ip: pi.inningsPitched,
+        so: pi.strikeouts,
+        wins: pi.wins,
+        kper9,
+        pWar,
+    };
+};
+
+const StatCard = ({ label, value, highlight = false }: any) => (
+    <div
+        className={`p-4 rounded-xl border ${highlight ? "bg-slate-900 border-slate-900 text-white" : "bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-800 text-slate-900 dark:text-slate-100"}`}
+    >
+        <p className="text-[10px] font-bold uppercase mb-1 text-slate-400">
+            {label}
+        </p>
+        <p className="text-2xl font-black tabular-nums">{value}</p>
+    </div>
+);
+
+const MiniCard = ({ label, value, isBad = false }: any) => (
+    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg p-3 text-center">
+        <p className="text-[10px] text-slate-400 mb-1">{label}</p>
+        <p
+            className={`text-lg font-bold tabular-nums ${isBad ? "text-red-500" : "text-slate-700 dark:text-slate-300"}`}
+        >
+            {value}
+        </p>
+    </div>
+);
+
 const Record: React.FC = () => {
     const [players, setPlayers] = useState<Player[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [mode, setMode] = useState<Mode>("hitter");
+    const [hRank, setHRank] = useState<HitterRankKey>("bWar");
+    const [pRank, setPRank] = useState<PitcherRankKey>("pWar");
 
     useEffect(() => {
         const q = query(collection(db, "players"), orderBy("name", "asc"));
@@ -44,52 +215,21 @@ const Record: React.FC = () => {
         );
     }, []);
 
-    const calcStats = (p: Player) => {
-        const { batting, pitching } = p;
-        const avg = batting.atBats > 0 ? batting.hits / batting.atBats : 0;
-        const obp =
-            batting.atBats + batting.walks + batting.hbp > 0
-                ? (batting.hits + batting.walks + batting.hbp) /
-                  (batting.atBats + batting.walks + batting.hbp)
-                : 0;
-        const singles =
-            batting.hits -
-            (batting.doubles + batting.triples + batting.homeRuns);
-        const slg =
-            batting.atBats > 0
-                ? (singles +
-                      batting.doubles * 2 +
-                      batting.triples * 3 +
-                      batting.homeRuns * 4) /
-                  batting.atBats
-                : 0;
-        const ops = obp + slg;
-        const bWar =
-            (batting.rbi * 1.2 +
-                batting.runs * 1.0 +
-                batting.hits * 0.5 +
-                batting.homeRuns * 2.5 -
-                (batting.k || 0) * 0.15) /
-            10;
-        const era =
-            pitching.inningsPitched > 0
-                ? (pitching.earnedRuns * 9) / pitching.inningsPitched
-                : 0;
-        const pWar =
-            (pitching.inningsPitched * 1.5 +
-                pitching.strikeouts * 0.5 -
-                pitching.earnedRuns * 1.2) /
-            10;
+    // 필터링: 항상 용병(mercenary)을 제외하도록 고정합니다.
+    const filteredPlayers = players.filter(
+        (p) => (p.teamId as string) !== "mercenary",
+    );
 
-        return { avg, obp, slg, ops, era, bWar, pWar };
-    };
+    const currentHRankInfo = HITTER_RANKS.find((r) => r.key === hRank)!;
+    const currentPRankInfo = PITCHER_RANKS.find((r) => r.key === pRank)!;
 
-    const sortedPlayers = [...players].sort((a, b) => {
-        const statA = calcStats(a);
-        const statB = calcStats(b);
-        return mode === "hitter"
-            ? statB.bWar - statA.bWar
-            : statB.pWar - statA.pWar;
+    const sortedPlayers = [...filteredPlayers].sort((a, b) => {
+        const sa = calcStats(a) as any;
+        const sb = calcStats(b) as any;
+        if (mode === "hitter") return sb[hRank] - sa[hRank];
+        return currentPRankInfo.asc
+            ? sa[pRank] - sb[pRank]
+            : sb[pRank] - sa[pRank];
     });
 
     const selected = players.find((p) => p.id === selectedId) ?? null;
@@ -100,7 +240,7 @@ const Record: React.FC = () => {
     return (
         <div className="min-h-screen bg-[#f9f9f8] dark:bg-slate-950 p-6">
             <div className="max-w-6xl mx-auto">
-                <div className="mb-6 flex justify-between items-end">
+                <div className="mb-6 flex justify-between items-end flex-wrap gap-3">
                     <div>
                         <p className="text-[11px] font-medium tracking-[0.12em] uppercase text-slate-400 mb-1">
                             Nangman Baseball League
@@ -109,65 +249,97 @@ const Record: React.FC = () => {
                             시즌 기록실
                         </h1>
                     </div>
-                    <div className="flex bg-white dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-800">
-                        {(["hitter", "pitcher"] as const).map((m) => (
-                            <button
-                                key={m}
-                                onClick={() => {
-                                    setMode(m);
-                                    setSelectedId(null);
-                                }}
-                                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === m ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
-                            >
-                                {m === "hitter" ? "타자 순위" : "투수 순위"}
-                            </button>
-                        ))}
+                    <div className="flex items-center gap-3">
+                        {/* 용병 필터 버튼을 제거했습니다. */}
+                        <div className="flex bg-white dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-800">
+                            {(["hitter", "pitcher"] as const).map((m) => (
+                                <button
+                                    key={m}
+                                    onClick={() => {
+                                        setMode(m);
+                                        setSelectedId(null);
+                                    }}
+                                    className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === m ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                                >
+                                    {m === "hitter" ? "타자 순위" : "투수 순위"}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 min-h-[600px]">
-                    {/* 사이드바 */}
+                <div className="flex border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 min-h-150">
                     <div className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col">
                         <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
                             <span className={labelCls}>
                                 {mode === "hitter"
-                                    ? "타자 WAR 순위"
-                                    : "투수 WAR 순위"}
+                                    ? `타자 ${currentHRankInfo.label} 순위`
+                                    : `투수 ${currentPRankInfo.label} 순위`}
                             </span>
                         </div>
-                        <div className="overflow-y-auto flex-1">
-                            {sortedPlayers.map((p, index) => (
-                                <div
-                                    key={p.id}
-                                    onClick={() => setSelectedId(p.id)}
-                                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 last:border-0 transition-colors ${selectedId === p.id ? "bg-slate-50 dark:bg-slate-800/50" : "hover:bg-slate-50/70 dark:hover:bg-slate-800/30"}`}
-                                >
-                                    <span
-                                        className={`text-[11px] font-black w-4 ${index < 3 ? "text-blue-600" : "text-slate-300"}`}
+                        <div className="flex flex-wrap gap-1 px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+                            {(mode === "hitter"
+                                ? HITTER_RANKS
+                                : PITCHER_RANKS
+                            ).map((r) => {
+                                const active =
+                                    mode === "hitter"
+                                        ? hRank === r.key
+                                        : pRank === r.key;
+                                return (
+                                    <button
+                                        key={r.key}
+                                        onClick={() =>
+                                            mode === "hitter"
+                                                ? setHRank(
+                                                      r.key as HitterRankKey,
+                                                  )
+                                                : setPRank(
+                                                      r.key as PitcherRankKey,
+                                                  )
+                                        }
+                                        className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${active ? "bg-slate-900 text-white" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}
                                     >
-                                        {index + 1}
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate">
-                                            {p.name}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400">
-                                            WAR{" "}
-                                            {(mode === "hitter"
-                                                ? calcStats(p).bWar
-                                                : calcStats(p).pWar
-                                            ).toFixed(2)}
-                                        </p>
-                                    </div>
+                                        {r.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="overflow-y-auto flex-1">
+                            {sortedPlayers.map((p, index) => {
+                                const s = calcStats(p) as any;
+                                const rankVal =
+                                    mode === "hitter"
+                                        ? currentHRankInfo.fmt(s[hRank])
+                                        : currentPRankInfo.fmt(s[pRank]);
+                                return (
                                     <div
-                                        className={`w-1.5 h-1.5 rounded-full ${TEAM_INFO[p.teamId]?.dot || "bg-slate-300"}`}
-                                    />
-                                </div>
-                            ))}
+                                        key={p.id}
+                                        onClick={() => setSelectedId(p.id)}
+                                        className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 last:border-0 transition-colors ${selectedId === p.id ? "bg-slate-50 dark:bg-slate-800/50" : "hover:bg-slate-50/70 dark:hover:bg-slate-800/30"}`}
+                                    >
+                                        <span
+                                            className={`text-[11px] font-black w-4 ${index < 3 ? "text-blue-600" : "text-slate-300"}`}
+                                        >
+                                            {index + 1}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate">
+                                                {p.name}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400">
+                                                {rankVal}
+                                            </p>
+                                        </div>
+                                        <div
+                                            className={`w-1.5 h-1.5 rounded-full ${TEAM_INFO[p.teamId]?.dot || "bg-slate-300"}`}
+                                        />
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    {/* 메인 상세 */}
                     <div className="flex-1 flex flex-col min-w-0">
                         {selected && stats ? (
                             <>
@@ -201,29 +373,36 @@ const Record: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="p-6 overflow-y-auto flex-1">
-                                    {/* ... StatCard 및 MiniCard 렌더링 부분 (기존과 동일) ... */}
                                     {mode === "hitter" ? (
                                         <section>
                                             <p className={`${labelCls} mb-4`}>
                                                 Batting Analysis (타격)
                                             </p>
-                                            <div className="grid grid-cols-4 gap-3 mb-8">
+                                            <div className="grid grid-cols-3 gap-3 mb-3">
                                                 <StatCard
                                                     label="OPS"
                                                     value={stats.ops.toFixed(3)}
                                                     highlight
                                                 />
                                                 <StatCard
-                                                    label="AVG"
-                                                    value={stats.avg.toFixed(3)}
-                                                />
-                                                <StatCard
-                                                    label="OBP"
+                                                    label="OBP 출루율"
                                                     value={stats.obp.toFixed(3)}
                                                 />
                                                 <StatCard
-                                                    label="SLG"
+                                                    label="SLG 장타율"
                                                     value={stats.slg.toFixed(3)}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 mb-6">
+                                                <StatCard
+                                                    label="AVG 타율"
+                                                    value={stats.avg.toFixed(3)}
+                                                />
+                                                <StatCard
+                                                    label="WAR"
+                                                    value={stats.bWar.toFixed(
+                                                        2,
+                                                    )}
                                                 />
                                             </div>
                                             <div className="grid grid-cols-5 gap-2">
@@ -264,25 +443,35 @@ const Record: React.FC = () => {
                                             <p className={`${labelCls} mb-4`}>
                                                 Pitching Analysis (투구)
                                             </p>
-                                            <div className="grid grid-cols-3 gap-3 mb-8">
+                                            <div className="grid grid-cols-3 gap-3 mb-3">
                                                 <StatCard
-                                                    label="ERA"
+                                                    label="ERA 평균자책"
                                                     value={stats.era.toFixed(2)}
                                                     highlight
                                                 />
                                                 <StatCard
-                                                    label="Innings"
-                                                    value={
-                                                        selected.pitching
-                                                            .inningsPitched
-                                                    }
+                                                    label="WHIP"
+                                                    value={stats.whip.toFixed(
+                                                        2,
+                                                    )}
                                                 />
                                                 <StatCard
-                                                    label="Strikeouts"
-                                                    value={
-                                                        selected.pitching
-                                                            .strikeouts
-                                                    }
+                                                    label="K/9"
+                                                    value={stats.kper9.toFixed(
+                                                        2,
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 mb-6">
+                                                <StatCard
+                                                    label="IP 이닝"
+                                                    value={stats.ip.toFixed(1)}
+                                                />
+                                                <StatCard
+                                                    label="WAR"
+                                                    value={stats.pWar.toFixed(
+                                                        2,
+                                                    )}
                                                 />
                                             </div>
                                             <div className="grid grid-cols-4 gap-2">
@@ -290,12 +479,6 @@ const Record: React.FC = () => {
                                                     label="승"
                                                     value={
                                                         selected.pitching.wins
-                                                    }
-                                                />
-                                                <MiniCard
-                                                    label="패"
-                                                    value={
-                                                        selected.pitching.losses
                                                     }
                                                 />
                                                 <MiniCard
@@ -312,6 +495,13 @@ const Record: React.FC = () => {
                                                             .earnedRuns
                                                     }
                                                     isBad
+                                                />
+                                                <MiniCard
+                                                    label="이닝"
+                                                    value={
+                                                        selected.pitching
+                                                            .inningsPitched
+                                                    }
                                                 />
                                             </div>
                                         </section>
@@ -332,28 +522,5 @@ const Record: React.FC = () => {
         </div>
     );
 };
-
-// StatCard, MiniCard 하단 컴포넌트는 기존과 동일하게 유지...
-const StatCard = ({ label, value, highlight = false }: any) => (
-    <div
-        className={`p-4 rounded-xl border ${highlight ? "bg-slate-900 border-slate-900 text-white" : "bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-800 text-slate-900 dark:text-slate-100"}`}
-    >
-        <p className="text-[10px] font-bold uppercase mb-1 text-slate-400">
-            {label}
-        </p>
-        <p className="text-2xl font-black tabular-nums">{value}</p>
-    </div>
-);
-
-const MiniCard = ({ label, value, isBad = false }: any) => (
-    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg p-3 text-center">
-        <p className="text-[10px] text-slate-400 mb-1">{label}</p>
-        <p
-            className={`text-lg font-bold tabular-nums ${isBad ? "text-red-500" : "text-slate-700 dark:text-slate-300"}`}
-        >
-            {value}
-        </p>
-    </div>
-);
 
 export default Record;

@@ -33,6 +33,8 @@ export interface Player {
     isManager: boolean;
     batting: BattingStats;
     pitching: PitchingStats;
+    batSide: "좌" | "우" | "양"; 
+    throwSide: "좌" | "우";
 }
 
 // 팀 누적 스탯 타입

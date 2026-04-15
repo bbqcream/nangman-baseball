@@ -38,6 +38,19 @@ const getAvg = (p: Player) =>
 const getEra = (p: Player) =>
     ((p.pitching.earnedRuns * 9) / (p.pitching.inningsPitched || 1)).toFixed(2);
 
+const BatThrowBadge = ({ player }: { player: Player }) => {
+    const bat = (player as any).batSide;
+    const thr = (player as any).throwSide;
+    if (!bat && !thr) return null;
+    return (
+        <span className="ml-1.5 text-[10px] font-bold text-slate-400">
+            {bat ? `${bat}타` : ""}
+            {bat && thr ? "/" : ""}
+            {thr ? `${thr}투` : ""}
+        </span>
+    );
+};
+
 const Home: React.FC = () => {
     const [players, setPlayers] = useState<Player[]>([]);
     const [selected, setSelected] = useState<string | null>(null);
@@ -133,13 +146,14 @@ const Home: React.FC = () => {
                                         {[
                                             "선수",
                                             "팀",
+                                            "투타",
                                             "AVG",
                                             "ERA",
                                             "타율 분포",
                                         ].map((h, i) => (
                                             <th
                                                 key={h}
-                                                className={`text-[11px] font-medium uppercase text-slate-400 px-5 py-2.5 ${i >= 2 ? "text-right" : "text-left"}`}
+                                                className={`text-[11px] font-medium uppercase text-slate-400 px-5 py-2.5 ${i >= 3 ? "text-right" : "text-left"}`}
                                             >
                                                 {h}
                                             </th>
@@ -159,6 +173,8 @@ const Home: React.FC = () => {
                                         );
                                         const isSelected =
                                             selected === player.id;
+                                        const bat = (player as any).batSide;
+                                        const thr = (player as any).throwSide;
 
                                         return (
                                             <tr
@@ -182,6 +198,18 @@ const Home: React.FC = () => {
                                                 </td>
                                                 <td className="px-5 py-3 text-[10px] text-slate-500">
                                                     {config.label.split(" ")[0]}
+                                                </td>
+                                                <td className="px-5 py-3">
+                                                    {bat || thr ? (
+                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                                                            {bat ?? "-"}타/
+                                                            {thr ?? "-"}투
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-300">
+                                                            —
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-5 py-3 text-right text-[13px] tabular-nums">
                                                     {getAvg(player)}
@@ -226,14 +254,23 @@ const Home: React.FC = () => {
 
 const DetailPanel: React.FC<{ player: Player }> = ({ player }) => {
     const config = TEAM_CONFIG[player.teamId] || TEAM_CONFIG.mercenary;
+    const bat = (player as any).batSide;
+    const thr = (player as any).throwSide;
     return (
         <div className="p-5">
-            <p className="font-bold text-lg mb-2">{player.name}</p>
-            <p
-                className={`text-xs font-bold mb-4 px-2 py-1 rounded inline-block ${config.bg} ${config.text}`}
-            >
-                {config.label}
-            </p>
+            <p className="font-bold text-lg mb-1">{player.name}</p>
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+                <span
+                    className={`text-xs font-bold px-2 py-1 rounded inline-block ${config.bg} ${config.text}`}
+                >
+                    {config.label}
+                </span>
+                {(bat || thr) && (
+                    <span className="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-600">
+                        {bat ?? "-"}타 / {thr ?? "-"}투
+                    </span>
+                )}
+            </div>
             <div className="grid grid-cols-2 gap-2">
                 <div className="bg-white p-3 rounded shadow-sm border border-slate-100">
                     <p className="text-[10px] text-slate-400 uppercase">AVG</p>

@@ -464,7 +464,7 @@ const Record: React.FC = () => {
                                             </div>
                                             <div className="grid grid-cols-2 gap-3 mb-6">
                                                 <StatCard
-                                                    label="IP 이닝"
+                                                    label="이닝"
                                                     value={stats.ip.toFixed(1)}
                                                 />
                                                 <StatCard

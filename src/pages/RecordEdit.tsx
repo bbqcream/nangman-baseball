@@ -13,8 +13,9 @@ import type { Player } from "../types/record-interface";
 const teamLabel = (teamId: string) =>
     teamId === "coupang" ? "쿠팡 일용직스" : "Daegu Yongkids";
 
+// 알잘딱 추가: 희플(SF)은 OBP(출루율) 계산의 정밀도를 위해 필수입니다.
 const BATTING_FIELDS: {
-    key: keyof Player["batting"];
+    key: keyof Player["batting"] | "sf";
     label: string;
     sub: string;
 }[] = [
@@ -23,24 +24,29 @@ const BATTING_FIELDS: {
     { key: "doubles", label: "2루타", sub: "2B" },
     { key: "triples", label: "3루타", sub: "3B" },
     { key: "homeRuns", label: "홈런", sub: "HR" },
-    { key: "walks", label: "볼넷", sub: "BB" },
-    { key: "hbp", label: "사구", sub: "HBP" },
     { key: "rbi", label: "타점", sub: "RBI" },
     { key: "runs", label: "득점", sub: "R" },
+    { key: "walks", label: "볼넷", sub: "BB" },
+    { key: "hbp", label: "사구", sub: "HBP" },
     { key: "k", label: "삼진", sub: "K" },
+    { key: "sf" as any, label: "희플", sub: "SF" },
 ];
 
+// 알잘딱 추가: 피안타, 볼넷, 사구가 있어야 WHIP와 피안타율 계산이 가능합니다.
 const PITCHING_FIELDS: {
-    key: keyof Player["pitching"];
+    key: keyof Player["pitching"] | "hitsAllowed" | "walks" | "hbp";
     label: string;
     sub: string;
     step?: string;
 }[] = [
     { key: "inningsPitched", label: "이닝", sub: "IP", step: "0.1" },
-    { key: "earnedRuns", label: "자책점", sub: "ER" },
-    { key: "strikeouts", label: "탈삼진", sub: "K" },
     { key: "wins", label: "승", sub: "W" },
     { key: "losses", label: "패", sub: "L" },
+    { key: "earnedRuns", label: "자책점", sub: "ER" },
+    { key: "strikeouts", label: "탈삼진", sub: "K" },
+    { key: "hitsAllowed" as any, label: "피안타", sub: "H" },
+    { key: "walks" as any, label: "볼넷", sub: "BB" },
+    { key: "hbp" as any, label: "사구", sub: "HBP" },
 ];
 
 const RecordEdit: React.FC = () => {
@@ -69,44 +75,57 @@ const RecordEdit: React.FC = () => {
         setSelectedId(player.id);
         setBatting({ ...player.batting });
         setPitching({ ...player.pitching });
-        setBattingStr(
-            Object.fromEntries(
-                Object.entries(player.batting).map(([k, v]) => [k, String(v)]),
-            ),
+
+        // 초기 문자열 상태 설정 (빈 값 대응)
+        const bItems: Record<string, string> = {};
+        Object.entries(player.batting).forEach(
+            ([k, v]) => (bItems[k] = String(v ?? 0)),
         );
-        setPitchingStr(
-            Object.fromEntries(
-                Object.entries(player.pitching).map(([k, v]) => [k, String(v)]),
-            ),
+        setBattingStr(bItems);
+
+        const pItems: Record<string, string> = {};
+        Object.entries(player.pitching).forEach(
+            ([k, v]) => (pItems[k] = String(v ?? 0)),
         );
+        setPitchingStr(pItems);
+
         setSaved(false);
     };
 
     const handleSave = async () => {
         if (!selectedId || !batting || !pitching) return;
         setSaving(true);
-        await updateDoc(doc(db, "players", selectedId), { batting, pitching });
-        setSaving(false);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
-        fetchPlayers();
+        try {
+            await updateDoc(doc(db, "players", selectedId), {
+                batting,
+                pitching,
+            });
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+            fetchPlayers();
+        } catch (e) {
+            console.error(e);
+            alert("저장 실패");
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const selected = players.find((p) => p.id === selectedId) ?? null;
-    const avg = selected
-        ? (selected.batting.hits / (selected.batting.atBats || 1)).toFixed(3)
-        : null;
-    const era = selected
-        ? (
-              (selected.pitching.earnedRuns * 9) /
-              (selected.pitching.inningsPitched || 1)
-          ).toFixed(2)
-        : null;
+    // 실시간 계산용 (선택된 데이터 기준)
+    const currentAvg =
+        batting && batting.atBats > 0
+            ? (batting.hits / batting.atBats).toFixed(3)
+            : "0.000";
+
+    const currentEra =
+        pitching && pitching.inningsPitched > 0
+            ? ((pitching.earnedRuns * 9) / pitching.inningsPitched).toFixed(2)
+            : "0.00";
 
     const labelCls =
         "text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500";
     const inputCls =
-        "w-full bg-transparent border-none outline-none text-[20px] font-medium text-slate-900 dark:text-slate-100 tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+        "w-full bg-transparent border-none outline-none text-[20px] font-medium text-slate-900 dark:text-slate-100 tabular-nums [appearance:textfield]";
 
     return (
         <div className="min-h-screen bg-[#f9f9f8] dark:bg-slate-950 p-6">
@@ -130,203 +149,219 @@ const RecordEdit: React.FC = () => {
                             </span>
                         </div>
                         <div className="overflow-y-auto flex-1">
-                            {players.map((p) => {
-                                const isCoupang = p.teamId === "coupang";
-                                return (
+                            {players.map((p) => (
+                                <div
+                                    key={p.id}
+                                    onClick={() => handleSelect(p)}
+                                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 last:border-0 transition-colors ${
+                                        selectedId === p.id
+                                            ? "bg-slate-50 dark:bg-slate-800/50"
+                                            : "hover:bg-slate-50/70 dark:hover:bg-slate-800/30"
+                                    }`}
+                                >
                                     <div
-                                        key={p.id}
-                                        onClick={() => handleSelect(p)}
-                                        className={[
-                                            "flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 last:border-0 transition-colors",
-                                            selectedId === p.id
-                                                ? "bg-slate-50 dark:bg-slate-800/50"
-                                                : "hover:bg-slate-50/70 dark:hover:bg-slate-800/30",
-                                        ].join(" ")}
+                                        className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium shrink-0 ${
+                                            p.teamId === "coupang"
+                                                ? "bg-amber-50 text-amber-800"
+                                                : "bg-blue-50 text-blue-800"
+                                        }`}
                                     >
-                                        <div
-                                            className={[
-                                                "w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium shrink-0",
-                                                isCoupang
-                                                    ? "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                                                    : "bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
-                                            ].join(" ")}
-                                        >
-                                            {p.name[0]}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate flex items-center gap-1.5">
-                                                {p.name}
-                                                {p.isManager && (
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />
-                                                )}
-                                            </p>
-                                            <p className="text-[11px] text-slate-400 truncate">
-                                                {isCoupang
-                                                    ? "쿠팡"
-                                                    : "Yongkids"}
-                                            </p>
-                                        </div>
+                                        {p.name[0]}
                                     </div>
-                                );
-                            })}
+                                    <div className="min-w-0">
+                                        <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate flex items-center gap-1.5">
+                                            {p.name}
+                                            {p.isManager && (
+                                                <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />
+                                            )}
+                                        </p>
+                                        <p className="text-[11px] text-slate-400 truncate">
+                                            {teamLabel(p.teamId)}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    {/* 메인 */}
+                    {/* 메인 에디터 */}
                     <div className="flex-1 flex flex-col min-w-0">
-                        <div className="px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
-                            {selected ? (
-                                <>
-                                    <div
-                                        className={[
-                                            "w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-medium shrink-0",
-                                            selected.teamId === "coupang"
-                                                ? "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                                                : "bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
-                                        ].join(" ")}
-                                    >
-                                        {selected.name[0]}
+                        {selectedId && batting && pitching ? (
+                            <>
+                                <div className="px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-medium shrink-0 ${
+                                                players.find(
+                                                    (p) => p.id === selectedId,
+                                                )?.teamId === "coupang"
+                                                    ? "bg-amber-50 text-amber-800"
+                                                    : "bg-blue-50 text-blue-800"
+                                            }`}
+                                        >
+                                            {
+                                                players.find(
+                                                    (p) => p.id === selectedId,
+                                                )?.name[0]
+                                            }
+                                        </div>
+                                        <div>
+                                            <p className="text-[14px] font-medium text-slate-900 dark:text-slate-100">
+                                                {
+                                                    players.find(
+                                                        (p) =>
+                                                            p.id === selectedId,
+                                                    )?.name
+                                                }
+                                            </p>
+                                            <p className="text-[11px] text-slate-400">
+                                                실시간 AVG {currentAvg} / ERA{" "}
+                                                {currentEra}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-[14px] font-medium text-slate-900 dark:text-slate-100">
-                                            {selected.name}
-                                        </p>
-                                        <p className="text-[11px] text-slate-400">
-                                            {teamLabel(selected.teamId)} · AVG{" "}
-                                            {avg} / ERA {era}
-                                        </p>
+                                </div>
+
+                                <div className="p-6 overflow-y-auto flex-1">
+                                    <p className={`${labelCls} mb-3`}>
+                                        타격 기록
+                                    </p>
+                                    <div className="grid grid-cols-5 gap-2 mb-8">
+                                        {BATTING_FIELDS.map(
+                                            ({ key, label, sub }) => (
+                                                <div
+                                                    key={key}
+                                                    className="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-3 border border-transparent focus-within:border-slate-200 transition-all"
+                                                >
+                                                    <p
+                                                        className={`${labelCls} mb-1.5`}
+                                                    >
+                                                        {label}
+                                                    </p>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        className={inputCls}
+                                                        value={
+                                                            battingStr[
+                                                                key as string
+                                                            ] ?? ""
+                                                        }
+                                                        onChange={(e) => {
+                                                            const val =
+                                                                e.target.value;
+                                                            setBattingStr(
+                                                                (prev) => ({
+                                                                    ...prev,
+                                                                    [key as string]:
+                                                                        val,
+                                                                }),
+                                                            );
+                                                            setBatting(
+                                                                (prev) => ({
+                                                                    ...prev!,
+                                                                    [key]:
+                                                                        parseFloat(
+                                                                            val,
+                                                                        ) || 0,
+                                                                }),
+                                                            );
+                                                        }}
+                                                        onFocus={(e) =>
+                                                            e.target.select()
+                                                        }
+                                                    />
+                                                    <p className="text-[10px] text-slate-400 mt-1">
+                                                        {sub}
+                                                    </p>
+                                                </div>
+                                            ),
+                                        )}
                                     </div>
-                                </>
-                            ) : (
-                                <span className="text-[13px] text-slate-400">
-                                    선수를 선택하세요
-                                </span>
-                            )}
-                        </div>
 
-                        {batting && pitching ? (
-                            <div className="p-6 overflow-y-auto flex-1">
-                                <p className={`${labelCls} mb-3`}>타격 기록</p>
-                                <div className="grid grid-cols-5 gap-2 mb-6">
-                                    {BATTING_FIELDS.map(
-                                        ({ key, label, sub }) => (
-                                            <div
-                                                key={key}
-                                                className="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-3"
-                                            >
-                                                <p
-                                                    className={`${labelCls} mb-1.5`}
+                                    <hr className="border-slate-100 dark:border-slate-800 mb-8" />
+
+                                    <p className={`${labelCls} mb-3`}>
+                                        투구 기록
+                                    </p>
+                                    <div className="grid grid-cols-5 gap-2 mb-8">
+                                        {PITCHING_FIELDS.map(
+                                            ({ key, label, sub, step }) => (
+                                                <div
+                                                    key={key}
+                                                    className="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-3 border border-transparent focus-within:border-slate-200 transition-all"
                                                 >
-                                                    {label}
-                                                </p>
-                                                <input
-                                                    type="number"
-                                                    min={0}
-                                                    className={inputCls}
-                                                    value={
-                                                        battingStr[key] ?? ""
-                                                    }
-                                                    onChange={(e) => {
-                                                        setBattingStr(
-                                                            (prev) => ({
-                                                                ...prev,
-                                                                [key]: e.target
-                                                                    .value,
-                                                            }),
-                                                        );
-                                                        setBatting((prev) => ({
-                                                            ...prev!,
-                                                            [key]:
-                                                                parseFloat(
-                                                                    e.target
-                                                                        .value,
-                                                                ) || 0,
-                                                        }));
-                                                    }}
-                                                    onFocus={(e) =>
-                                                        e.target.select()
-                                                    }
-                                                />
-                                                <p className="text-[10px] text-slate-400 mt-1">
-                                                    {sub}
-                                                </p>
-                                            </div>
-                                        ),
-                                    )}
+                                                    <p
+                                                        className={`${labelCls} mb-1.5`}
+                                                    >
+                                                        {label}
+                                                    </p>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        step={step ?? "1"}
+                                                        className={inputCls}
+                                                        value={
+                                                            pitchingStr[
+                                                                key as string
+                                                            ] ?? ""
+                                                        }
+                                                        onChange={(e) => {
+                                                            const val =
+                                                                e.target.value;
+                                                            setPitchingStr(
+                                                                (prev) => ({
+                                                                    ...prev,
+                                                                    [key as string]:
+                                                                        val,
+                                                                }),
+                                                            );
+                                                            setPitching(
+                                                                (prev) => ({
+                                                                    ...prev!,
+                                                                    [key]:
+                                                                        parseFloat(
+                                                                            val,
+                                                                        ) || 0,
+                                                                }),
+                                                            );
+                                                        }}
+                                                        onFocus={(e) =>
+                                                            e.target.select()
+                                                        }
+                                                    />
+                                                    <p className="text-[10px] text-slate-400 mt-1">
+                                                        {sub}
+                                                    </p>
+                                                </div>
+                                            ),
+                                        )}
+                                    </div>
+
+                                    <div className="sticky bottom-0 bg-white dark:bg-slate-900 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                        <span
+                                            className={`text-[12px] font-medium text-teal-500 transition-opacity ${saved ? "opacity-100" : "opacity-0"}`}
+                                        >
+                                            ✓ 기록이 성공적으로 저장되었습니다
+                                        </span>
+                                        <button
+                                            onClick={handleSave}
+                                            disabled={saving}
+                                            className="px-8 py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[13px] font-bold rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
+                                        >
+                                            {saving
+                                                ? "저장 중..."
+                                                : "변경사항 저장하기"}
+                                        </button>
+                                    </div>
                                 </div>
-
-                                <hr className="border-slate-100 dark:border-slate-800 mb-6" />
-
-                                <p className={`${labelCls} mb-3`}>투구 기록</p>
-                                <div className="grid grid-cols-5 gap-2 mb-6">
-                                    {PITCHING_FIELDS.map(
-                                        ({ key, label, sub, step }) => (
-                                            <div
-                                                key={key}
-                                                className="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-3"
-                                            >
-                                                <p
-                                                    className={`${labelCls} mb-1.5`}
-                                                >
-                                                    {label}
-                                                </p>
-                                                <input
-                                                    type="number"
-                                                    min={0}
-                                                    step={step ?? "1"}
-                                                    className={inputCls}
-                                                    value={
-                                                        pitchingStr[key] ?? ""
-                                                    }
-                                                    onChange={(e) => {
-                                                        setPitchingStr(
-                                                            (prev) => ({
-                                                                ...prev,
-                                                                [key]: e.target
-                                                                    .value,
-                                                            }),
-                                                        );
-                                                        setPitching((prev) => ({
-                                                            ...prev!,
-                                                            [key]:
-                                                                parseFloat(
-                                                                    e.target
-                                                                        .value,
-                                                                ) || 0,
-                                                        }));
-                                                    }}
-                                                    onFocus={(e) =>
-                                                        e.target.select()
-                                                    }
-                                                />
-                                                <p className="text-[10px] text-slate-400 mt-1">
-                                                    {sub}
-                                                </p>
-                                            </div>
-                                        ),
-                                    )}
-                                </div>
-
-                                <hr className="border-slate-100 dark:border-slate-800 mb-4" />
-
-                                <div className="flex items-center justify-between">
-                                    <span
-                                        className={`text-[12px] font-medium text-teal-500 transition-opacity duration-300 ${saved ? "opacity-100" : "opacity-0"}`}
-                                    >
-                                        저장 완료
-                                    </span>
-                                    <button
-                                        onClick={handleSave}
-                                        disabled={saving}
-                                        className="px-5 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[13px] font-medium rounded-lg hover:opacity-80 transition-opacity disabled:opacity-30"
-                                    >
-                                        {saving ? "저장 중..." : "기록 저장"}
-                                    </button>
-                                </div>
-                            </div>
+                            </>
                         ) : (
-                            <div className="flex-1 flex items-center justify-center text-[13px] text-slate-400">
-                                ← 좌측에서 선수를 선택하세요
+                            <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
+                                <span className="text-4xl mb-3">✏️</span>
+                                <p className="text-[13px] font-medium italic">
+                                    좌측 목록에서 수정할 선수를 선택하세요
+                                </p>
                             </div>
                         )}
                     </div>

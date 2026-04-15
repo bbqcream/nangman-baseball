@@ -447,7 +447,6 @@ const Lineup = () => {
             updatedAt: Timestamp.now(),
         });
         setIsLocked(lock);
-        alert("라인업이 성공적으로 저장되었습니다.");
     };
 
     if (loading)

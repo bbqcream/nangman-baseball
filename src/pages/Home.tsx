@@ -38,18 +38,7 @@ const getAvg = (p: Player) =>
 const getEra = (p: Player) =>
     ((p.pitching.earnedRuns * 9) / (p.pitching.inningsPitched || 1)).toFixed(2);
 
-const BatThrowBadge = ({ player }: { player: Player }) => {
-    const bat = (player as any).batSide;
-    const thr = (player as any).throwSide;
-    if (!bat && !thr) return null;
-    return (
-        <span className="ml-1.5 text-[10px] font-bold text-slate-400">
-            {bat ? `${bat}타` : ""}
-            {bat && thr ? "/" : ""}
-            {thr ? `${thr}투` : ""}
-        </span>
-    );
-};
+// REMOVED: BatThrowBadge component was here and caused the TS6133 error.
 
 const Home: React.FC = () => {
     const [players, setPlayers] = useState<Player[]>([]);

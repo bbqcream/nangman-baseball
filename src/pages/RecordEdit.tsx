@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
     collection,
     getDocs,
@@ -13,7 +13,6 @@ import type { Player } from "../types/record-interface";
 const teamLabel = (teamId: string) =>
     teamId === "coupang" ? "쿠팡 일용직스" : "Daegu Yongkids";
 
-// 알잘딱 추가: 희플(SF)은 OBP(출루율) 계산의 정밀도를 위해 필수입니다.
 const BATTING_FIELDS: {
     key: keyof Player["batting"] | "sf";
     label: string;
@@ -32,7 +31,6 @@ const BATTING_FIELDS: {
     { key: "sf" as any, label: "희플", sub: "SF" },
 ];
 
-// 알잘딱 추가: 피안타, 볼넷, 사구가 있어야 WHIP와 피안타율 계산이 가능합니다.
 const PITCHING_FIELDS: {
     key: keyof Player["pitching"] | "hitsAllowed" | "walks" | "hbp";
     label: string;
@@ -48,6 +46,13 @@ const PITCHING_FIELDS: {
     { key: "walks" as any, label: "볼넷", sub: "BB" },
     { key: "hbp" as any, label: "사구", sub: "HBP" },
 ];
+
+// 야구 이닝(ex: 2.1)을 실제 계산용 수치(ex: 2.333)로 변환
+const convertToRealInnings = (ip: number): number => {
+    const innings = Math.floor(ip);
+    const outs = Math.round((ip - innings) * 10);
+    return innings + outs / 3;
+};
 
 const RecordEdit: React.FC = () => {
     const [players, setPlayers] = useState<Player[]>([]);
@@ -76,7 +81,6 @@ const RecordEdit: React.FC = () => {
         setBatting({ ...player.batting });
         setPitching({ ...player.pitching });
 
-        // 초기 문자열 상태 설정 (빈 값 대응)
         const bItems: Record<string, string> = {};
         Object.entries(player.batting).forEach(
             ([k, v]) => (bItems[k] = String(v ?? 0)),
@@ -88,7 +92,6 @@ const RecordEdit: React.FC = () => {
             ([k, v]) => (pItems[k] = String(v ?? 0)),
         );
         setPitchingStr(pItems);
-
         setSaved(false);
     };
 
@@ -111,16 +114,40 @@ const RecordEdit: React.FC = () => {
         }
     };
 
-    // 실시간 계산용 (선택된 데이터 기준)
-    const currentAvg =
-        batting && batting.atBats > 0
-            ? (batting.hits / batting.atBats).toFixed(3)
-            : "0.000";
+    // 실시간 계산 로직
+    const currentAvg = useMemo(() => {
+        if (!batting || batting.atBats <= 0) return "0.000";
+        return (batting.hits / batting.atBats).toFixed(3);
+    }, [batting]);
 
-    const currentEra =
-        pitching && pitching.inningsPitched > 0
-            ? ((pitching.earnedRuns * 9) / pitching.inningsPitched).toFixed(2)
-            : "0.00";
+    const currentEra = useMemo(() => {
+        if (!pitching || pitching.inningsPitched <= 0) return "0.00";
+        const realInnings = convertToRealInnings(pitching.inningsPitched);
+        return ((pitching.earnedRuns * 9) / realInnings).toFixed(2);
+    }, [pitching]);
+
+    const handlePitchingChange = (key: string, val: string) => {
+        let numVal = parseFloat(val) || 0;
+        let displayVal = val;
+
+        // 이닝 입력 시 아웃카운트(소수점) 보정 로직
+        if (key === "inningsPitched") {
+            const innings = Math.floor(numVal);
+            const outs = Math.round((numVal - innings) * 10);
+
+            // .3 아웃 이상 입력 시 1이닝으로 올림
+            if (outs >= 3) {
+                numVal = innings + 1;
+                displayVal = String(numVal);
+            }
+        }
+
+        setPitchingStr((prev) => ({ ...prev, [key]: displayVal }));
+        setPitching((prev) => ({
+            ...prev!,
+            [key]: numVal,
+        }));
+    };
 
     const labelCls =
         "text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500";
@@ -160,11 +187,7 @@ const RecordEdit: React.FC = () => {
                                     }`}
                                 >
                                     <div
-                                        className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium shrink-0 ${
-                                            p.teamId === "coupang"
-                                                ? "bg-amber-50 text-amber-800"
-                                                : "bg-blue-50 text-blue-800"
-                                        }`}
+                                        className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium shrink-0 ${p.teamId === "coupang" ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}
                                     >
                                         {p.name[0]}
                                     </div>
@@ -191,13 +214,7 @@ const RecordEdit: React.FC = () => {
                                 <div className="px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <div
-                                            className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-medium shrink-0 ${
-                                                players.find(
-                                                    (p) => p.id === selectedId,
-                                                )?.teamId === "coupang"
-                                                    ? "bg-amber-50 text-amber-800"
-                                                    : "bg-blue-50 text-blue-800"
-                                            }`}
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-medium shrink-0 ${players.find((p) => p.id === selectedId)?.teamId === "coupang" ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}
                                         >
                                             {
                                                 players.find(
@@ -306,37 +323,27 @@ const RecordEdit: React.FC = () => {
                                                                 key as string
                                                             ] ?? ""
                                                         }
-                                                        onChange={(e) => {
-                                                            const val =
-                                                                e.target.value;
-                                                            setPitchingStr(
-                                                                (prev) => ({
-                                                                    ...prev,
-                                                                    [key as string]:
-                                                                        val,
-                                                                }),
-                                                            );
-                                                            setPitching(
-                                                                (prev) => ({
-                                                                    ...prev!,
-                                                                    [key]:
-                                                                        parseFloat(
-                                                                            val,
-                                                                        ) || 0,
-                                                                }),
-                                                            );
-                                                        }}
+                                                        onChange={(e) =>
+                                                            handlePitchingChange(
+                                                                key as string,
+                                                                e.target.value,
+                                                            )
+                                                        }
                                                         onFocus={(e) =>
                                                             e.target.select()
                                                         }
                                                     />
                                                     <p className="text-[10px] text-slate-400 mt-1">
-                                                        {sub}
+                                                        {key ===
+                                                        "inningsPitched"
+                                                            ? "Ex) 2.1, 2.2"
+                                                            : sub}
                                                     </p>
                                                 </div>
                                             ),
                                         )}
                                     </div>
+
                                     <div className="flex items-center gap-2 mt-2">
                                         <div className="flex items-center gap-1">
                                             <span className={labelCls}>
@@ -356,15 +363,7 @@ const RecordEdit: React.FC = () => {
                                                                 { batSide: v },
                                                             ).then(fetchPlayers)
                                                         }
-                                                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${
-                                                            players.find(
-                                                                (p) =>
-                                                                    p.id ===
-                                                                    selectedId,
-                                                            )?.batSide === v
-                                                                ? "bg-blue-600 text-white"
-                                                                : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                                                        }`}
+                                                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${players.find((p) => p.id === selectedId)?.batSide === v ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
                                                     >
                                                         {v}
                                                     </button>
@@ -393,15 +392,7 @@ const RecordEdit: React.FC = () => {
                                                                 },
                                                             ).then(fetchPlayers)
                                                         }
-                                                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${
-                                                            players.find(
-                                                                (p) =>
-                                                                    p.id ===
-                                                                    selectedId,
-                                                            )?.throwSide === v
-                                                                ? "bg-slate-800 text-white"
-                                                                : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                                                        }`}
+                                                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${players.find((p) => p.id === selectedId)?.throwSide === v ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
                                                     >
                                                         {v}
                                                     </button>

@@ -5,6 +5,13 @@ import type { Player } from "../types/record-interface";
 
 type Mode = "hitter" | "pitcher";
 
+// 야구 이닝(ex: 2.1)을 실제 계산용 수치(ex: 2.333)로 변환하는 유틸리티
+const convertToRealInnings = (ip: number): number => {
+    const innings = Math.floor(ip);
+    const outs = Math.round((ip - innings) * 10); // 소수점 첫째 자리 추출
+    return innings + outs / 3;
+};
+
 const formatSide = (side?: string) => {
     if (side === "좌") return "L";
     if (side === "우") return "R";
@@ -68,6 +75,8 @@ type PitcherRankKey = (typeof PITCHER_RANKS)[number]["key"];
 
 const calcStats = (p: Player) => {
     const { batting: b, pitching: pi } = p;
+
+    // 타자 계산 로직
     const avg = b.atBats > 0 ? b.hits / b.atBats : 0;
     const obp =
         b.atBats + b.walks + b.hbp > 0
@@ -87,18 +96,22 @@ const calcStats = (p: Player) => {
             b.homeRuns * 2.5 -
             (b.k || 0) * 0.15) /
         10;
-    const era =
-        pi.inningsPitched > 0 ? (pi.earnedRuns * 9) / pi.inningsPitched : 99.99;
+
+    // 투수 계산 로직 (이닝 보정 적용)
+    const realInnings = convertToRealInnings(pi.inningsPitched);
+
+    const era = realInnings > 0 ? (pi.earnedRuns * 9) / realInnings : 99.99;
     const whip =
-        pi.inningsPitched > 0
+        realInnings > 0
             ? (((pi as any).walks || 0) + ((pi as any).hitsAllowed || 0)) /
-              pi.inningsPitched
+              realInnings
             : 99.99;
-    const kper9 =
-        pi.inningsPitched > 0 ? (pi.strikeouts * 9) / pi.inningsPitched : 0;
+    const kper9 = realInnings > 0 ? (pi.strikeouts * 9) / realInnings : 0;
+
+    // pWar도 보정된 이닝으로 계산하는 것이 정확합니다.
     const pWar =
-        (pi.inningsPitched * 1.5 + pi.strikeouts * 0.5 - pi.earnedRuns * 1.2) /
-        10;
+        (realInnings * 1.5 + pi.strikeouts * 0.5 - pi.earnedRuns * 1.2) / 10;
+
     return {
         avg,
         obp,
@@ -112,7 +125,7 @@ const calcStats = (p: Player) => {
         sb: (b as any).sb || 0,
         era,
         whip,
-        ip: pi.inningsPitched,
+        ip: pi.inningsPitched, // 화면 표시용은 원래 2.1 형태 유지
         so: pi.strikeouts,
         wins: pi.wins,
         kper9,
@@ -175,6 +188,7 @@ const Record: React.FC = () => {
     return (
         <div className="min-h-screen bg-[#f9f9f8] dark:bg-slate-950 p-6">
             <div className="max-w-6xl mx-auto">
+                {/* 헤더 및 모드 전환 로직 (기존과 동일) */}
                 <div className="mb-6 flex justify-between items-end flex-wrap gap-3">
                     <div>
                         <p className="text-[11px] font-medium tracking-[0.12em] uppercase text-slate-400 mb-1">
@@ -199,7 +213,9 @@ const Record: React.FC = () => {
                         ))}
                     </div>
                 </div>
+
                 <div className="flex border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 min-h-150">
+                    {/* 사이드바 랭킹 리스트 */}
                     <div className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col">
                         <div className="flex flex-wrap gap-1 px-3 py-2 bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100">
                             {(mode === "hitter"
@@ -251,14 +267,6 @@ const Record: React.FC = () => {
                                                           pRank
                                                       ],
                                                   )}
-                                            <span className="ml-1.5 text-blue-500/70 font-bold">
-                                                ·{" "}
-                                                {formatSide((p as any).batSide)}
-                                                /
-                                                {formatSide(
-                                                    (p as any).throwSide,
-                                                )}
-                                            </span>
                                         </p>
                                     </div>
                                     <div
@@ -268,6 +276,8 @@ const Record: React.FC = () => {
                             ))}
                         </div>
                     </div>
+
+                    {/* 메인 상세 페이지 */}
                     <div className="flex-1 flex flex-col min-w-0">
                         {selected && stats ? (
                             <>
@@ -316,8 +326,10 @@ const Record: React.FC = () => {
                                         </p>
                                     </div>
                                 </div>
+
                                 <div className="p-6 overflow-y-auto flex-1">
                                     {mode === "hitter" ? (
+                                        // 타자 섹션 (생략 가능)
                                         <section>
                                             <p className="text-[11px] font-medium uppercase text-slate-400 mb-4">
                                                 Batting Analysis (타격)
@@ -383,6 +395,7 @@ const Record: React.FC = () => {
                                             </div>
                                         </section>
                                     ) : (
+                                        // 투수 섹션
                                         <section>
                                             <p className="text-[11px] font-medium uppercase text-slate-400 mb-4">
                                                 Pitching Analysis (투구)
@@ -441,7 +454,7 @@ const Record: React.FC = () => {
                                                     isBad
                                                 />
                                                 <MiniCard
-                                                    label="이닝"
+                                                    label="기록 이닝"
                                                     value={
                                                         selected.pitching
                                                             .inningsPitched

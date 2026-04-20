@@ -62,6 +62,7 @@ const POSITIONS = [
     "외야수",
     "지명타자",
 ];
+
 const POSITION_MAP: Record<string, any> = {
     투수: { abbr: "P", color: "text-red-500" },
     "1루수": { abbr: "1B", color: "text-gray-600" },
@@ -72,52 +73,55 @@ const POSITION_MAP: Record<string, any> = {
     지명타자: { abbr: "DH", color: "text-gray-600" },
 };
 
+/**
+ * 통계 레이블 생성 함수
+ * 투수: ERA 계산 (이닝 보정) + 이닝/승/패
+ * 타자: OPS 계산
+ */
 const getStatLabel = (p: any, type: "batter" | "pitcher") => {
     try {
         const { batting, pitching } = p;
+
         if (type === "pitcher") {
-            const era =
-                pitching?.inningsPitched > 0
-                    ? (pitching.earnedRuns * 9) / pitching.inningsPitched
-                    : 0;
-            const obp =
-                batting?.atBats + batting?.walks + batting?.hbp > 0
-                    ? (batting.hits + batting.walks + batting.hbp) /
-                      (batting.atBats + batting.walks + batting.hbp)
-                    : 0;
-            const singles =
-                batting?.hits -
-                (batting?.doubles + batting?.triples + batting?.homeRuns);
-            const slg =
-                batting?.atBats > 0
-                    ? (singles +
-                          batting.doubles * 2 +
-                          batting.triples * 3 +
-                          batting.homeRuns * 4) /
-                      batting.atBats
-                    : 0;
-            return `ERA ${era.toFixed(2)} | OPS ${(obp + slg).toFixed(3)}`;
+            const ip = pitching?.inningsPitched || 0;
+            const earnedRuns = pitching?.earnedRuns || 0;
+            const wins = pitching?.wins || 0;
+            const losses = pitching?.losses || 0;
+
+            // 야구 이닝 계산 (0.1이닝 = 1/3)
+            const innings = Math.floor(ip);
+            const outs = Math.round((ip - innings) * 10);
+            const realInnings = innings + outs / 3;
+
+            // ERA = (자책점 * 9) / 이닝
+            const era = realInnings > 0 ? (earnedRuns * 9) / realInnings : 0;
+
+            return `ERA ${era.toFixed(2)} | ${ip.toFixed(1)}이닝 ${wins}승 ${losses}패`;
         } else {
+            const atBats = batting?.atBats || 0;
+            const hits = batting?.hits || 0;
+            const walks = batting?.walks || 0;
+            const hbp = batting?.hbp || 0;
+            const doubles = batting?.doubles || 0;
+            const triples = batting?.triples || 0;
+            const homeRuns = batting?.homeRuns || 0;
+
             const obp =
-                batting?.atBats + batting?.walks + batting?.hbp > 0
-                    ? (batting.hits + batting.walks + batting.hbp) /
-                      (batting.atBats + batting.walks + batting.hbp)
+                atBats + walks + hbp > 0
+                    ? (hits + walks + hbp) / (atBats + walks + hbp)
                     : 0;
-            const singles =
-                batting?.hits -
-                (batting?.doubles + batting?.triples + batting?.homeRuns);
+
+            const singles = hits - (doubles + triples + homeRuns);
             const slg =
-                batting?.atBats > 0
-                    ? (singles +
-                          batting.doubles * 2 +
-                          batting.triples * 3 +
-                          batting.homeRuns * 4) /
-                      batting.atBats
+                atBats > 0
+                    ? (singles + doubles * 2 + triples * 3 + homeRuns * 4) /
+                      atBats
                     : 0;
+
             return `OPS ${(obp + slg).toFixed(3)}`;
         }
-    } catch {
-        return type === "pitcher" ? "ERA 0.00 | OPS 0.000" : "OPS 0.000";
+    } catch (e) {
+        return type === "pitcher" ? "ERA 0.00 | 0.0이닝 0승 0패" : "OPS 0.000";
     }
 };
 
@@ -141,7 +145,7 @@ const StarterPitcherCard = ({
                     Starting Pitcher
                 </span>
                 {pitcher?.name && (
-                    <span className="text-[11px] font-black text-red-600">
+                    <span className="text-[10px] font-black text-red-600 truncate max-w-[180px]">
                         {pitcher.statLabel}
                     </span>
                 )}
@@ -192,18 +196,10 @@ const StarterPitcherCard = ({
                                 });
                                 setOpen(false);
                             }}
-                            className="px-4 py-3 hover:bg-red-50 cursor-pointer flex justify-between items-center border-b last:border-none"
+                            className="px-4 py-3 hover:bg-red-50 cursor-pointer flex justify-between items-center border-b"
                         >
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold text-sm">
-                                    {p.name}
-                                </span>
-                                <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-slate-100 text-slate-500">
-                                    {formatSide(p.batSide)}/
-                                    {formatSide(p.throwSide)}
-                                </span>
-                            </div>
-                            <span className="text-red-600 font-black text-xs">
+                            <span className="font-bold text-sm">{p.name}</span>
+                            <span className="text-red-600 font-black text-[10px]">
                                 {getStatLabel(p, "pitcher")}
                             </span>
                         </div>
@@ -284,52 +280,43 @@ const LineupCard = ({
                             </div>
                             <div className="flex-1 relative">
                                 <div className="flex items-center justify-between gap-2">
-                                    <div className="flex-1 flex items-center gap-2">
-                                        <input
-                                            type="text"
-                                            disabled={isLocked}
-                                            placeholder="선수 검색"
-                                            value={
-                                                isLocked
-                                                    ? player.name
-                                                    : openDropdown === pid
-                                                      ? currentSearch
-                                                      : player.name
-                                            }
-                                            onChange={(e) =>
+                                    <input
+                                        type="text"
+                                        disabled={isLocked}
+                                        placeholder="선수 검색"
+                                        value={
+                                            isLocked
+                                                ? player.name
+                                                : openDropdown === pid
+                                                  ? currentSearch
+                                                  : player.name
+                                        }
+                                        onChange={(e) =>
+                                            setSearchTerms((prev) => ({
+                                                ...prev,
+                                                [pid]: e.target.value,
+                                            }))
+                                        }
+                                        onFocus={() => {
+                                            if (!isLocked) {
+                                                setOpenDropdown(pid);
                                                 setSearchTerms((prev) => ({
                                                     ...prev,
-                                                    [pid]: e.target.value,
-                                                }))
+                                                    [pid]: player.name || "",
+                                                }));
                                             }
-                                            onFocus={() => {
-                                                if (!isLocked) {
-                                                    setOpenDropdown(pid);
-                                                    setSearchTerms((prev) => ({
-                                                        ...prev,
-                                                        [pid]:
-                                                            player.name || "",
-                                                    }));
-                                                }
-                                            }}
-                                            onBlur={() =>
-                                                setTimeout(
-                                                    () => setOpenDropdown(null),
-                                                    200,
-                                                )
-                                            }
-                                            className="bg-transparent font-bold text-slate-800 outline-none w-full text-[15px] placeholder-slate-300"
-                                        />
-                                        {player.name && player.batSide && (
-                                            <span className="shrink-0 text-[9px] font-black text-slate-400 border border-slate-200 px-1 rounded">
-                                                {formatSide(player.batSide)}/
-                                                {formatSide(player.throwSide)}
-                                            </span>
-                                        )}
-                                    </div>
+                                        }}
+                                        onBlur={() =>
+                                            setTimeout(
+                                                () => setOpenDropdown(null),
+                                                200,
+                                            )
+                                        }
+                                        className="bg-transparent font-bold text-slate-800 outline-none w-full text-[15px]"
+                                    />
                                     {player.name && (
                                         <span
-                                            className={`shrink-0 text-[10px] font-black px-2 py-0.5 rounded shadow-sm ${side === "away" ? "bg-amber-100 text-amber-700" : "bg-blue-50 text-blue-600"}`}
+                                            className={`shrink-0 text-[10px] font-black px-2 py-0.5 rounded shadow-sm bg-slate-100 text-slate-600`}
                                         >
                                             {player.statLabel}
                                         </span>
@@ -364,23 +351,12 @@ const LineupCard = ({
                                                         );
                                                         setOpenDropdown(null);
                                                     }}
-                                                    className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-50 last:border-none"
+                                                    className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between border-b"
                                                 >
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-bold text-sm text-slate-700">
-                                                            {p.name}
-                                                        </span>
-                                                        <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-slate-100 text-slate-500">
-                                                            {formatSide(
-                                                                p.batSide,
-                                                            )}
-                                                            /
-                                                            {formatSide(
-                                                                p.throwSide,
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    <span className="text-blue-600 font-black text-xs">
+                                                    <span className="font-bold text-sm">
+                                                        {p.name}
+                                                    </span>
+                                                    <span className="text-blue-600 font-black text-[10px]">
                                                         {getStatLabel(
                                                             p,
                                                             "batter",
@@ -392,13 +368,7 @@ const LineupCard = ({
                                     )}
                             </div>
                             <div className="w-16 shrink-0">
-                                {isLocked ? (
-                                    <span
-                                        className={`block text-center text-xs font-black ${posInfo.color}`}
-                                    >
-                                        {posInfo.abbr}
-                                    </span>
-                                ) : (
+                                {!isLocked ? (
                                     <select
                                         value={player.position}
                                         onChange={(e) =>
@@ -406,7 +376,7 @@ const LineupCard = ({
                                                 position: e.target.value,
                                             })
                                         }
-                                        className="w-full bg-slate-100 border-none rounded-md text-[10px] font-black p-1.5 outline-none text-slate-600"
+                                        className="w-full bg-slate-100 border-none rounded-md text-[10px] font-black p-1.5 outline-none"
                                     >
                                         <option value="">POS</option>
                                         {POSITIONS.map((pos) => (
@@ -415,6 +385,12 @@ const LineupCard = ({
                                             </option>
                                         ))}
                                     </select>
+                                ) : (
+                                    <span
+                                        className={`block text-center text-xs font-black ${posInfo.color}`}
+                                    >
+                                        {posInfo.abbr}
+                                    </span>
                                 )}
                             </div>
                         </div>
@@ -424,9 +400,10 @@ const LineupCard = ({
             {!isLocked && (
                 <button
                     onClick={() => onAdd(side)}
-                    className="w-full py-5 text-[11px] font-black text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all border-t border-dashed border-slate-100"
+                    className="w-full py-5 text-[11px] font-black text-slate-400 hover:text-slate-600 hover:bg-slate-50 border-t border-dashed"
                 >
-                    + ADD BATTER
+                    {" "}
+                    + ADD BATTER{" "}
                 </button>
             )}
         </div>
@@ -496,13 +473,9 @@ const Lineup = () => {
         <div className="min-h-screen bg-[#f8f9fa] p-8 pb-32">
             <div className="max-w-7xl mx-auto">
                 <header className="mb-16 text-center">
-                    <span className="text-blue-600 font-black text-sm tracking-widest uppercase">
-                        {dateId}
-                    </span>
                     <h1 className="text-6xl font-black italic text-gray-900 tracking-tighter mt-4 uppercase">
                         Battle Lineup
                     </h1>
-                    <div className="w-20 h-2 bg-blue-600 mx-auto mt-6"></div>
                 </header>
                 {!exists ? (
                     <div className="bg-white rounded-[3rem] p-24 text-center shadow-2xl border border-gray-100 max-w-2xl mx-auto">
@@ -512,9 +485,9 @@ const Lineup = () => {
                                 setHomeLineup(makeEmptyLineup());
                                 setExists(true);
                             }}
-                            className="px-16 py-6 bg-blue-600 text-white font-black text-2xl rounded-2xl shadow-xl hover:scale-105 transition-transform active:scale-95"
+                            className="px-16 py-6 bg-blue-600 text-white font-black text-2xl rounded-2xl shadow-xl"
                         >
-                            새 라인업 생성하기
+                            생성하기
                         </button>
                     </div>
                 ) : (
@@ -525,9 +498,9 @@ const Lineup = () => {
                                 side="away"
                                 isLocked={isLocked}
                                 onUpdate={(_s: any, id: any, u: any) =>
-                                    setAwayLineup((prev) =>
-                                        prev.map((p) =>
-                                            p.id === id ? { ...p, ...u } : p,
+                                    setAwayLineup((p) =>
+                                        p.map((x) =>
+                                            x.id === id ? { ...x, ...u } : x,
                                         ),
                                     )
                                 }
@@ -553,9 +526,9 @@ const Lineup = () => {
                                 side="home"
                                 isLocked={isLocked}
                                 onUpdate={(_s: any, id: any, u: any) =>
-                                    setHomeLineup((prev) =>
-                                        prev.map((p) =>
-                                            p.id === id ? { ...p, ...u } : p,
+                                    setHomeLineup((p) =>
+                                        p.map((x) =>
+                                            x.id === id ? { ...x, ...u } : x,
                                         ),
                                     )
                                 }
@@ -580,11 +553,9 @@ const Lineup = () => {
                         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-sm px-6 z-[120]">
                             <button
                                 onClick={() => handleSave(!isLocked)}
-                                className={`w-full py-6 rounded-[1.5rem] font-black text-xl shadow-2xl transition-all active:scale-95 ${isLocked ? "bg-gray-900 text-white" : "bg-red-600 text-white hover:bg-red-700"}`}
+                                className={`w-full py-6 rounded-[1.5rem] font-black text-xl shadow-2xl ${isLocked ? "bg-gray-900" : "bg-red-600"} text-white`}
                             >
-                                {isLocked
-                                    ? "🔄 LINEUP UNLOCK"
-                                    : "✅ SAVE & LOCK"}
+                                {isLocked ? "🔄 UNLOCK" : "✅ SAVE & LOCK"}
                             </button>
                         </div>
                     </>
